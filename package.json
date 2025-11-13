@@ -1,0 +1,14 @@
+{
+  "name": "ubu-ai-gateway-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "yarn --cwd frontend dev",
+    "build": "yarn --cwd frontend build",
+    "generate": "yarn --cwd frontend generate",
+    "start": "yarn --cwd frontend start",
+    "server:dev": "yarn --cwd backend dev",
+    "server:start": "yarn --cwd backend start"
+  }
+}
+

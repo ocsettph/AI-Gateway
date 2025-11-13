@@ -1,0 +1,272 @@
+<script setup lang="ts">
+import { useHead, useRuntimeConfig } from 'nuxt/app';
+import { ref, onMounted, computed } from 'vue';
+
+type NavCard = { title: string; href: string; icon: string; badge?: boolean }
+
+const cards = ref<NavCard[]>([
+  {
+    title: "Request Access",
+    href: "/request",
+    icon: "line-md:document-list",
+  },
+  {
+    title: "API Keys",
+    href: "/keys",
+    icon: "line-md:cog",
+  },
+  {
+    title: "Status",
+    href: "/status",
+    icon: "line-md:heart-filled-half",
+  },
+  {
+    title: "Documentation",
+    href: "/docs",
+    icon: "line-md:github",
+  },
+  {
+    title: "API Playground",
+    href: "/api-playground",
+    icon: "line-md:volume-high-filled",
+  },
+  {
+    title: "About",
+    href: "/about",
+    icon: "line-md:at",
+  },
+])
+
+useHead({
+  title: "UBU AI FLOW",
+})
+
+const base = (useRuntimeConfig().public as any).basePath || '/'
+
+// Admin detection (for showing Manage Users button)
+const isAdmin = ref(false)
+const pendingCount = ref(0)
+
+// Mobile cards list: include admin actions when admin
+const mobileCards = computed<NavCard[]>(() => {
+  const base: NavCard[] = [...cards.value]
+  if (isAdmin.value) {
+    base.push({ title: 'Manage API Keys', href: '/admin/keys', icon: 'line-md:plus' })
+    base.push({ title: 'Approve Requests', href: '/admin/requests', icon: 'line-md:check', badge: true })
+    base.push({ title: 'Manage Users', href: '/admin/users', icon: 'line-md:account' })
+  }
+  return base
+})
+
+onMounted(async () => {
+  try {
+    const apiBase = useRuntimeConfig().public.apiBase as string
+    const me = await $fetch(`${apiBase}/api/me`, { credentials: 'include' }) as any
+    isAdmin.value = me?.user?.role === 'ADMIN'
+    if (isAdmin.value) {
+      const r = await $fetch(`${apiBase}/api/admin/requests`, { credentials: 'include' }) as any
+      const list = r?.requests || []
+      pendingCount.value = list.filter((x: any) => x.status === 'pending').length
+    }
+  } catch (e) {
+    console.error('Failed to fetch user data:', e)
+    isAdmin.value = false
+  }
+})
+</script>
+
+<template>
+  <div class="md:min-h-[calc(100vh-11rem)] flex flex-col my-24 md:my-0 items-center justify-center container mx-auto relative">
+    <!-- Animated Background (Client-side only) -->
+    <ClientOnly>
+      <AnimatedBackground />
+      <template #fallback>
+        <!-- Placeholder for server-side rendering to prevent hydration mismatch -->
+        <div class="absolute inset-0 pointer-events-none overflow-hidden z-0"></div>
+      </template>
+    </ClientOnly>
+
+    <div class="flex items-center gap-8 relative z-10">
+
+      <div class="hidden md:flex flex-col gap-8 lg:gap-10 absolute left-1/2 top-1/2 -translate-y-1/2 md:-translate-x-[300px] lg:-translate-x-[360px] xl:-translate-x-[420px] 2xl:-translate-x-[480px] z-10">
+        <div
+          v-for="(card, index) in cards.slice(0, 3)"
+          :key="`card-ml-${index}`"
+          class="w-28 lg:w-32 flex items-center justify-center transform hover:scale-105 transition-all dark:!bg-[#1a1a1a] dark:hover:!bg-[#222222] bg-white hover:bg-gray-50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-4 lg:p-6"
+          :class="{
+            'rotate-2': index === 0,
+            '-rotate-3': index === 2,
+          }"
+          :style="{
+            aspectRatio: '1/1',
+          }"
+        >
+          <NuxtLink :to="card.href" class="flex flex-col gap-2 items-center text-center">
+            <div class="w-9 lg:w-10 h-9 lg:h-10 flex items-center justify-center">
+              <svg v-if="card.icon === 'line-md:document-list'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:cog'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.066 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:heart-filled-half'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+              </svg>
+            </div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ card.title }}</span>
+          </NuxtLink>
+        </div>
+      </div>
+
+      <header class="flex-1 z-10">
+        <div class="space-y-8 z-10">
+          <div class="space-y-4">
+            <h1
+              class="font-semibold text-center text-lg text-black/50 dark:text-white/50 md:text-xl"
+            >
+              Hi, I am
+              <span
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-200/70 dark:bg-white/10 border border-black/5 dark:border-white/10 shadow-sm mx-2 select-none align-middle"
+              >
+                <span class="flex h-7 w-7 items-center justify-center ">
+                  <img :src="base + 'assets/UBU_AI_FLOW_icon.png'" alt="UBU AI FLOW" class="h-5 w-5 object-contain" />
+                </span>
+                <span class="text-gray-800 dark:text-gray-100 font-semibold tracking-wide">UBU AI FLOW</span>
+              </span>
+              a
+            </h1>
+
+            <h1
+              class="font-semibold text-center text-5xl text-black/90 dark:text-white/90 md:text-6xl"
+            >
+              AI Gateway
+            </h1>
+          </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-center gap-5 md:gap-6 select-none">
+          <img :src="base + 'assets/Ubu_logo.png'" alt="UBU AI FLOW" title="UBU AI FLOW" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
+          <img :src="base + 'assets/ubufavicon.png'" alt="UBU Favicon" title="UBU Favicon" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
+          <img :src="base + 'assets/api.png'" alt="TypeScript" title="TypeScript" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
+          <!-- <img src="/assets/Vue.js_Logo_2.svg.png" alt="Vue.js" title="Vue.js" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
+          <img src="/assets/Tailwind_CSS_Logo.svg.png" alt="Tailwind CSS" title="Tailwind CSS" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
+          <img src="/assets/nodejs.png" alt="Node.js" title="Node.js" class="h-6 w-6 md:h-7 md:w-7 object-contain" /> -->
+        </div>
+      </header>
+
+      <div class="hidden md:flex flex-col gap-8 lg:gap-10 absolute left-1/2 top-1/2 -translate-y-1/2 md:translate-x-[190px] lg:translate-x-[250px] xl:translate-x-[310px] 2xl:translate-x-[370px] z-10">
+        <div
+          v-for="(card, index) in cards.slice(3, 6)"
+          :key="`card-mr-${index}`"
+          class="w-28 lg:w-32 flex items-center justify-center transform hover:scale-105 transition-all dark:!bg-[#1a1a1a] dark:hover:!bg-[#222222] bg-white hover:bg-gray-50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-4 lg:p-6"
+          :class="{
+            '-rotate-2': index === 0,
+            'rotate-3': index === 2,
+          }"
+          :style="{
+            aspectRatio: '1/1',
+          }"
+        >
+          <NuxtLink :to="card.href" class="flex flex-col gap-2 items-center text-center">
+            <div class="w-9 lg:w-10 h-9 lg:h-10 flex items-center justify-center">
+              <svg v-if="card.icon === 'line-md:github'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:volume-high-filled'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192L5.636 18.364M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:at'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ card.title }}</span>
+          </NuxtLink>
+        </div>
+			</div>
+		</div>
+
+      <!-- Admin only: Manage buttons at bottom center -->
+      <div v-if="isAdmin" class="hidden md:flex space-x-4 absolute left-1/2 -translate-x-1/2 z-10 bottom-6 md:bottom-10 lg:bottom-6">
+        <NuxtLink to="/admin/keys" class="w-32 lg:w-36 flex items-center justify-center transform hover:scale-105 transition-all dark:!bg-[#1a1a1a] dark:hover:!bg-[#222222] bg-white hover:bg-gray-50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6">
+          <div class="flex flex-col gap-2 items-center text-center">
+            <div class="w-10 h-10 flex items-center justify-center">
+              <svg class="w-7 h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v8m4-4H8m12 0a8 8 0 11-16 0 8 8 0 0116 0z" />
+              </svg>
+            </div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">Manage API Keys</span>
+          </div>
+        </NuxtLink>
+        <NuxtLink to="/admin/requests" class="relative w-32 lg:w-36 flex items-center justify-center transform hover:scale-105 transition-all dark:!bg-[#1a1a1a] dark:hover:!bg-[#222222] bg-white hover:bg-gray-50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6">
+          <div v-if="pendingCount > 0" class="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-semibold rounded-full px-2 py-0.5">{{ pendingCount }}</div>
+          <div class="flex flex-col gap-2 items-center text-center">
+            <div class="w-10 h-10 flex items-center justify-center">
+              <svg class="w-7 h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">Approve Requests</span>
+          </div>
+        </NuxtLink>
+        <NuxtLink to="/admin/users" class="w-32 lg:w-36 flex items-center justify-center transform hover:scale-105 transition-all dark:!bg-[#1a1a1a] dark:hover:!bg-[#222222] bg-white hover:bg-gray-50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6">
+          <div class="flex flex-col gap-2 items-center text-center">
+            <div class="w-10 h-10 flex items-center justify-center">
+              <svg class="w-7 h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+              </svg>
+            </div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">Manage Users</span>
+          </div>
+        </NuxtLink>
+      </div>
+
+      <!-- Mobile Cards -->
+      <div class="grid md:hidden grid-cols-2 gap-4 w-full mt-24 z-10 px-4">
+        <div
+          v-for="(card, index) in mobileCards"
+          :key="`card-m-${index}`"
+          class="w-full flex items-center justify-center dark:!bg-[#1a1a1a] dark:hover:!bg-[#222222] bg-white hover:bg-gray-50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-4"
+          :style="{
+            aspectRatio: '1/1',
+          }"
+        >
+          <NuxtLink :to="card.href" class="relative flex flex-col gap-2 items-center text-center">
+            <div v-if="card.badge && pendingCount > 0" class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-semibold rounded-full px-1.5 py-0.5">{{ pendingCount }}</div>
+            <div class="w-8 h-8 flex items-center justify-center">
+              <svg v-if="card.icon === 'line-md:document-list'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:cog'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 00-1.066 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:heart-filled-half'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:github'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:volume-high-filled'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192L5.636 18.364M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:at'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:account'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:plus'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m6-6H6" />
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:check'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ card.title }}</span>
+          </NuxtLink>
+        </div>
+        
+		</div>
+	</div>
+</template>

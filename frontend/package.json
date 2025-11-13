@@ -1,0 +1,37 @@
+{
+  "name": "ubu-ai-gateway-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --host",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "start": "node .output/server/index.mjs",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@nuxt/ui": "^4.1.0",
+    "@nuxtjs/color-mode": "^3.5.2",
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "@prisma/client": "^6.18.0",
+    "cookie": "^0.6.0",
+    "dayjs": "^1.11.13",
+    "jsonwebtoken": "^9.0.2",
+    "nitropack": "^2.9.7",
+    "nuxt": "^3.13.2",
+    "ofetch": "^1.4.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^22.7.5",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.41",
+    "prisma": "^6.18.0",
+    "sweetalert2": "^11.26.3",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vue-tsc": "^2.1.6"
+  }
+}
