@@ -201,7 +201,7 @@ function setSSRError(ssrContext, error) {
 
 const renderSSRHeadOptions = {"omitLineBreaks":false};
 
-const entryFileName = "KwkY6HM2.js";
+const entryFileName = "BCTpd6EE.js";
 
 globalThis.__buildAssetsURL = buildAssetsURL;
 globalThis.__publicAssetsURL = publicAssetsURL;

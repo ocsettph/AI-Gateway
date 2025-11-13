@@ -38,7 +38,7 @@ export default defineNuxtConfig({
       // ค่าเริ่มต้น: prod ใต้ dev2 เรียกผ่าน nginx path, dev เรียก backend local
       apiBase: process.env.NUXT_PUBLIC_API_BASE || (process.env.NODE_ENV === 'production' ? '/ai_gateway_api' : 'http://localhost:4000'),
       basePath: process.env.NUXT_APP_BASE_URL || (process.env.NODE_ENV === 'production' ? '/ai_gateway/' : '/'),
-      appName: process.env.PUBLIC_APP_NAME || "UBU AI FLOW"
+      appName: process.env.PUBLIC_APP_NAME || "UBU AI SERVICE"
     }
   },
 

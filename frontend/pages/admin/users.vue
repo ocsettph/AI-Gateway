@@ -551,7 +551,7 @@ definePageMeta({
   middleware: 'admin-only'
 })
 
-useHead({ title: 'จัดการผู้ใช้ - UBU AI FLOW' })
+useHead({ title: 'จัดการผู้ใช้ - UBU AI SERVICE' })
 
 // Type definitions
 interface User {

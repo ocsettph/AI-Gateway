@@ -222,9 +222,9 @@ import { useHead, useRuntimeConfig } from 'nuxt/app';
 import { ref, computed, onMounted } from 'vue'
 
 useHead({ 
-	title: 'System Status - UBU AI FLOW',
+	title: 'System Status - UBU AI SERVICE',
 	meta: [
-		{ name: 'description', content: 'สถานะระบบ UBU AI FLOW' }
+		{ name: 'description', content: 'สถานะระบบ UBU AI SERVICE' }
 	]
 });
 

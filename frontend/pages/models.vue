@@ -43,7 +43,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useHead } from 'nuxt/app'
 
-useHead({ title: 'Models - UBU AI FLOW' })
+useHead({ title: 'Models - UBU AI SERVICE' })
 
 const list = ref<any[]>([])
 const loading = ref(true)

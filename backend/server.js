@@ -184,7 +184,7 @@ async function getModelPricingPerM(modelId) {
         headers: {
           Authorization: `Bearer ${OPENROUTER_TOKEN}`,
           'HTTP-Referer': process.env.PUBLIC_ORIGIN || 'http://localhost:3000',
-          'X-Title': 'UBU AI FLOW'
+          'X-Title': 'UBU AI SERVICE'
         }
       });
       const items = Array.isArray(resp.data?.data) ? resp.data.data : [];
@@ -966,7 +966,7 @@ app.get('/api/models', async (_req, res) => {
       headers: {
         Authorization: `Bearer ${OPENROUTER_TOKEN}`,
         'HTTP-Referer': process.env.PUBLIC_ORIGIN || 'http://localhost:3000',
-        'X-Title': 'UBU AI FLOW'
+        'X-Title': 'UBU AI SERVICE'
       }
     });
     const items = Array.isArray(resp.data?.data) ? resp.data.data : [];
@@ -1061,7 +1061,7 @@ app.get('/api/status', async (_req, res) => {
         headers: {
           Authorization: `Bearer ${OPENROUTER_TOKEN}`,
           'HTTP-Referer': process.env.PUBLIC_ORIGIN || 'http://localhost:3000',
-          'X-Title': 'UBU AI FLOW'
+          'X-Title': 'UBU AI SERVICE'
         },
         timeout: 7000
       });
@@ -1594,7 +1594,7 @@ app.post('/api/test-model', async (req, res) => {
           Authorization: `Bearer ${useKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': process.env.PUBLIC_ORIGIN || 'http://localhost:3000',
-          'X-Title': 'UBU AI FLOW'
+          'X-Title': 'UBU AI SERVICE'
         },
         timeout: 20000
       });
@@ -3147,7 +3147,7 @@ if (enableV1) {
           Authorization: `Bearer ${useKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': process.env.PUBLIC_ORIGIN || 'https://dev2.ubu.ac.th/ai_gateway/',
-          'X-Title': 'UBU AI FLOW (dev2)'
+          'X-Title': 'UBU AI SERVICE (dev2)'
         },
         timeout: 30000
       });

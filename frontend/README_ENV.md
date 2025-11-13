@@ -17,7 +17,7 @@ REDIRECT_URI=http://localhost:3000/callback
 
 # Public config
 PUBLIC_API_BASE=http://localhost:3000
-PUBLIC_APP_NAME=UBU AI FLOW
+PUBLIC_APP_NAME=UBU AI SERVICE
 
 # Database URL (optional for Prisma tooling)
 DATABASE_URL=postgresql://ai:ubu-ai@202.28.49.204:5433/ai-gateway?schema=public

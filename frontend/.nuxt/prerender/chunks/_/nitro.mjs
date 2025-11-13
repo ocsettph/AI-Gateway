@@ -607,7 +607,7 @@ function _expandFromEnv(value) {
 const _inlineRuntimeConfig = {
   "app": {
     "baseURL": "/ai_gateway/",
-    "buildId": "d491b3ff-530d-4d40-ae10-fd85a40a79fb",
+    "buildId": "58e2b435-aa0d-4839-b564-497781e7cb66",
     "buildAssetsDir": "/_nuxt/",
     "cdnURL": ""
   },
@@ -637,7 +637,7 @@ const _inlineRuntimeConfig = {
   "public": {
     "apiBase": "/ai_gateway_api",
     "basePath": "/ai_gateway/",
-    "appName": "UBU AI FLOW"
+    "appName": "UBU AI SERVICE"
   }
 };
 const envOptions = {

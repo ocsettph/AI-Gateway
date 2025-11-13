@@ -127,7 +127,7 @@
 import { ref, onMounted } from 'vue'
 import { useHead } from 'nuxt/app'
 
-useHead({ title: 'API Playground - UBU AI FLOW' })
+useHead({ title: 'API Playground - UBU AI SERVICE' })
 
 const method = ref<'GET' | 'POST'>('GET')
 const url = ref((useRuntimeConfig().public.apiBase as string) + '/health')

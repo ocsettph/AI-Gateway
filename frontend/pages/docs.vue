@@ -4,7 +4,7 @@
 			<!-- Header -->
 			<div class="mb-12">
 				<h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">Documentation</h1>
-				<p class="text-xl text-gray-600 dark:text-gray-300">คู่มือการใช้งาน UBU AI FLOW</p>
+				<p class="text-xl text-gray-600 dark:text-gray-300">คู่มือการใช้งาน UBU AI SERVICE</p>
 			</div>
 
 			<div class="grid lg:grid-cols-4 gap-8">
@@ -29,7 +29,7 @@
 						<!-- Getting Started -->
 						<section id="getting-started" class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
 							<h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-4">Getting Started</h2>
-							<p class="text-gray-600 dark:text-gray-300 mb-6">UBU AI FLOW เป็นศูนย์กลาง AI platform สำหรับชุมชน UBU ที่ช่วยให้นักศึกษา คณาจารย์ และนักวิจัยสามารถเข้าถึงเครื่องมือ AI ชั้นนำได้อย่างง่ายดาย</p>
+							<p class="text-gray-600 dark:text-gray-300 mb-6">UBU AI SERVICE เป็นศูนย์กลาง AI platform สำหรับชุมชน UBU ที่ช่วยให้นักศึกษา คณาจารย์ และนักวิจัยสามารถเข้าถึงเครื่องมือ AI ชั้นนำได้อย่างง่ายดาย</p>
 							
 							<div class="space-y-4">
 								<div class="flex items-start space-x-3">
@@ -67,7 +67,7 @@
 						<!-- API Keys -->
 						<section id="api-keys" class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
 							<h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-4">API Keys</h2>
-							<p class="text-gray-600 dark:text-gray-300 mb-6">API Key เป็นกุญแจสำคัญในการเข้าถึง UBU AI FLOW services</p>
+							<p class="text-gray-600 dark:text-gray-300 mb-6">API Key เป็นกุญแจสำคัญในการเข้าถึง UBU AI SERVICE services</p>
 							
                             <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
                                 <h3 class="font-medium text-gray-900 dark:text-white mb-2">Base URL</h3>
@@ -211,9 +211,9 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 definePageMeta({ middleware: [] })
 
 useHead({ 
-	title: 'Documentation - UBU AI FLOW',
+	title: 'Documentation - UBU AI SERVICE',
 	meta: [
-		{ name: 'description', content: 'คู่มือการใช้งาน UBU AI FLOW' }
+		{ name: 'description', content: 'คู่มือการใช้งาน UBU AI SERVICE' }
 	]
 });
 

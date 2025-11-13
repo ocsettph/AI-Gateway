@@ -194,7 +194,7 @@ import { ref, onMounted } from 'vue';
 import { useHead, useRuntimeConfig } from 'nuxt/app';
 
 useHead({ 
-	title: 'จัดการ API Keys - UBU AI FLOW',
+	title: 'จัดการ API Keys - UBU AI SERVICE',
 	meta: [
 		{ name: 'description', content: 'ดูและจัดการ API Key ที่ได้รับการอนุมัติแล้ว' }
 	]

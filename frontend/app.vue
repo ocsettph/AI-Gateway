@@ -67,7 +67,7 @@ onMounted(() => {
 })
 
 useHead(() => {
-  let string = "UBU AI FLOW"
+  let string = "UBU AI SERVICE"
 
   return {
     titleTemplate: `%s`,
@@ -94,8 +94,8 @@ useHead(() => {
         <div class="flex justify-between items-center py-4">
           <!-- Logo and Name (clickable, animated on hover) -->
           <NuxtLink to="/" class="flex items-center space-x-2 group cursor-pointer">
-            <img :src="base + 'assets/UBU_AI_FLOW_icon.png'" alt="UBU AI FLOW" class="h-8 w-8 object-contain group-hover:rotate-3 transition-transform duration-200">
-            <span class="text-lg font-bold text-gray-900 dark:text-white">UBU AI FLOW</span>
+            <img :src="base + 'assets/UBU_AI_FLOW_icon.png'" alt="UBU AI SERVICE" class="h-8 w-8 object-contain group-hover:rotate-3 transition-transform duration-200">
+            <span class="text-lg font-bold text-gray-900 dark:text-white">UBU AI SERVICE</span>
           </NuxtLink>
           
           <div class="flex items-center gap-3">
@@ -142,12 +142,12 @@ useHead(() => {
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div class="flex flex-col md:flex-row justify-between items-center gap-4">
           <div class="flex items-center space-x-2">
-            <img :src="base + 'assets/UBU_AI_FLOW_icon.png'" alt="UBU AI FLOW" class="h-6 w-6 object-contain flex-shrink-0">
-            <span class="text-sm font-medium text-gray-900 dark:text-white">UBU AI FLOW | AI Gateway</span>
+            <img :src="base + 'assets/UBU_AI_FLOW_icon.png'" alt="UBU AI SERVICE" class="h-6 w-6 object-contain flex-shrink-0">
+            <span class="text-sm font-medium text-gray-900 dark:text-white">UBU AI SERVICE | AI Gateway</span>
           </div>
           
           <div class="text-xs text-gray-500 dark:text-gray-400 text-center">
-            <div>&copy; 2025 UBU AI FLOW Team </div>
+            <div>&copy; 2025 UBU AI SERVICE Team </div>
             <div class="mt-1">Template inspired by <a href="https://eggsy.xyz" target="_blank" rel="noopener noreferrer" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">eggsy.xyz</a></div>
           </div>
         </div>

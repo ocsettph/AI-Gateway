@@ -35,7 +35,7 @@ img[src*="UBU_AI_FLOW_icon"] {
   @apply bg-white/70 dark:bg-white/10 backdrop-blur border border-neutral-200/60 dark:border-neutral-700/60 rounded-xl shadow-sm p-6;
 }
 
-/* Brand gradient button (matches UBU AI FLOW logo) */
+/* Brand gradient button (matches UBU AI SERVICE logo) */
 @layer components {
   .btn-brand {
     @apply inline-flex items-center justify-center px-6 py-3 rounded-xl text-white font-semibold shadow-md transition-colors transition-transform select-none;

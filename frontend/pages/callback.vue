@@ -3,7 +3,7 @@
 		<div class="max-w-md w-full space-y-8">
 			<div class="text-center">
 				<div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
-					<img src="/assets/UBU_AI_FLOW_icon.png" alt="UBU AI Flow" class="h-10 w-10 object-contain">
+					<img src="/assets/UBU_AI_FLOW_icon.png" alt="UBU AI SERVICE" class="h-10 w-10 object-contain">
 				</div>
 				<h2 class="text-3xl font-bold text-gray-900 dark:text-white">กำลังเข้าสู่ระบบ</h2>
 				<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
@@ -96,7 +96,7 @@ import { ref, onMounted } from 'vue';
 import { useHead, navigateTo, useRuntimeConfig } from 'nuxt/app';
 
 useHead({ 
-	title: 'กำลังเข้าสู่ระบบ - UBU AI FLOW',
+	title: 'กำลังเข้าสู่ระบบ - UBU AI SERVICE',
 	meta: [
 		{ name: 'description', content: 'กำลังประมวลผลการเข้าสู่ระบบจาก UBU Portal' }
 	]

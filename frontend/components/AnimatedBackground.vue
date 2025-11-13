@@ -3,12 +3,12 @@
     <div class="animated-grid"></div>
     <div class="spotlight-overlay"></div>
     <div class="floating-shapes">
-      <img src="/assets/icon.png" alt="UBU AI FLOW" class="shape shape-1" />
-      <img src="/assets/icon.png" alt="UBU AI FLOW" class="shape shape-2" />
-      <img src="/assets/icon.png" alt="UBU AI FLOW" class="shape shape-3" />
-      <img src="/assets/icon.png" alt="UBU AI FLOW" class="shape shape-4" />
-      <img src="/assets/icon.png" alt="UBU AI FLOW" class="shape shape-5" />
-      <img src="/assets/icon.png" alt="UBU AI FLOW" class="shape shape-6" />
+      <img src="/assets/icon.png" alt="UBU AI SERVICE" class="shape shape-1" />
+      <img src="/assets/icon.png" alt="UBU AI SERVICE" class="shape shape-2" />
+      <img src="/assets/icon.png" alt="UBU AI SERVICE" class="shape shape-3" />
+      <img src="/assets/icon.png" alt="UBU AI SERVICE" class="shape shape-4" />
+      <img src="/assets/icon.png" alt="UBU AI SERVICE" class="shape shape-5" />
+      <img src="/assets/icon.png" alt="UBU AI SERVICE" class="shape shape-6" />
     </div>
   </div>
 </template>

@@ -4,7 +4,7 @@
 			<!-- Header -->
 			<div class="mb-12 text-center">
 				<h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">Request Access</h1>
-				<p class="text-xl text-gray-600 dark:text-gray-300">ขอสิทธิ์การใช้งาน UBU AI FLOW</p>
+				<p class="text-xl text-gray-600 dark:text-gray-300">ขอสิทธิ์การใช้งาน UBU AI SERVICE</p>
 			</div>
 
 			<!-- Request Form -->
@@ -192,9 +192,9 @@ import { useHead, useRuntimeConfig } from 'nuxt/app';
 import { useRouter } from 'vue-router';
 
 useHead({ 
-	title: 'Request Access - UBU AI FLOW',
+	title: 'Request Access - UBU AI SERVICE',
 	meta: [
-		{ name: 'description', content: 'ขอสิทธิ์การใช้งาน UBU AI FLOW' }
+		{ name: 'description', content: 'ขอสิทธิ์การใช้งาน UBU AI SERVICE' }
 	]
 });
 

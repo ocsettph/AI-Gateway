@@ -1,18 +1,371 @@
 {
-  "@vite/client": {
+  "_AnimatedBackground.CdrHAnWU.css": {
+    "resourceType": "style",
     "prefetch": true,
-    "isEntry": true,
-    "file": "@vite/client",
-    "css": [],
-    "module": true,
-    "resourceType": "script"
+    "preload": true,
+    "file": "AnimatedBackground.CdrHAnWU.css",
+    "src": "_AnimatedBackground.CdrHAnWU.css"
   },
-  "D:/CursorAI/ai-gateway/frontend/node_modules/nuxt/dist/app/entry.js": {
+  "_CosdZ535.js": {
     "resourceType": "script",
     "module": true,
     "prefetch": true,
     "preload": true,
+    "file": "CosdZ535.js",
+    "name": "virtual_public",
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ]
+  },
+  "_DlAUqK2U.js": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "DlAUqK2U.js",
+    "name": "_plugin-vue_export-helper"
+  },
+  "_ZdkTQECz.js": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "ZdkTQECz.js",
+    "name": "AnimatedBackground",
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js",
+      "_DlAUqK2U.js"
+    ],
+    "css": [
+      "AnimatedBackground.CdrHAnWU.css"
+    ]
+  },
+  "AnimatedBackground.CdrHAnWU.css": {
+    "file": "AnimatedBackground.CdrHAnWU.css",
+    "resourceType": "style",
+    "prefetch": true,
+    "preload": true
+  },
+  "middleware/admin-only.ts": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "DKvHjg_Q.js",
+    "name": "admin-only",
+    "src": "middleware/admin-only.ts",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ]
+  },
+  "node_modules/nuxt/dist/app/components/error-404.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "DhBbirQ1.js",
+    "name": "error-404",
+    "src": "node_modules/nuxt/dist/app/components/error-404.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js",
+      "_DlAUqK2U.js"
+    ],
+    "css": [
+      "error-404.BSvats-j.css"
+    ]
+  },
+  "error-404.BSvats-j.css": {
+    "file": "error-404.BSvats-j.css",
+    "resourceType": "style",
+    "prefetch": true,
+    "preload": true
+  },
+  "node_modules/nuxt/dist/app/components/error-500.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "KtJwdNNB.js",
+    "name": "error-500",
+    "src": "node_modules/nuxt/dist/app/components/error-500.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_DlAUqK2U.js",
+      "node_modules/nuxt/dist/app/entry.js"
+    ],
+    "css": [
+      "error-500.DOWD7OuR.css"
+    ]
+  },
+  "error-500.DOWD7OuR.css": {
+    "file": "error-500.DOWD7OuR.css",
+    "resourceType": "style",
+    "prefetch": true,
+    "preload": true
+  },
+  "node_modules/nuxt/dist/app/entry.js": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "BCTpd6EE.js",
+    "name": "entry",
+    "src": "node_modules/nuxt/dist/app/entry.js",
     "isEntry": true,
-    "file": "D:/CursorAI/ai-gateway/frontend/node_modules/nuxt/dist/app/entry.js"
+    "dynamicImports": [
+      "middleware/admin-only.ts",
+      "node_modules/nuxt/dist/app/components/error-404.vue",
+      "node_modules/nuxt/dist/app/components/error-500.vue"
+    ],
+    "css": [
+      "entry.C1DYZNrn.css"
+    ]
+  },
+  "entry.C1DYZNrn.css": {
+    "file": "entry.C1DYZNrn.css",
+    "resourceType": "style",
+    "prefetch": true,
+    "preload": true
+  },
+  "node_modules/sweetalert2/dist/sweetalert2.esm.all.js": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "DrhBs4VY.js",
+    "name": "sweetalert2.esm.all",
+    "src": "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+    "isDynamicEntry": true
+  },
+  "pages/about.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "LSlWVWMx.js",
+    "name": "about",
+    "src": "pages/about.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_CosdZ535.js",
+      "node_modules/nuxt/dist/app/entry.js"
+    ]
+  },
+  "pages/admin/keys.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "8T5th2sU.js",
+    "name": "keys",
+    "src": "pages/admin/keys.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ],
+    "dynamicImports": [
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js"
+    ]
+  },
+  "pages/admin/requests.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "wUumH2DV.js",
+    "name": "requests",
+    "src": "pages/admin/requests.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ],
+    "dynamicImports": [
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js"
+    ]
+  },
+  "pages/admin/users.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "P3mE8434.js",
+    "name": "users",
+    "src": "pages/admin/users.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ],
+    "dynamicImports": [
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js"
+    ]
+  },
+  "pages/ai-gateway.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "DOpTjO-b.js",
+    "name": "ai-gateway",
+    "src": "pages/ai-gateway.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_ZdkTQECz.js",
+      "node_modules/nuxt/dist/app/entry.js",
+      "_DlAUqK2U.js"
+    ]
+  },
+  "pages/api-playground.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "me8FMQLU.js",
+    "name": "api-playground",
+    "src": "pages/api-playground.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ]
+  },
+  "pages/callback.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "BxXcqKhi.js",
+    "name": "callback",
+    "src": "pages/callback.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js",
+      "_CosdZ535.js"
+    ]
+  },
+  "pages/docs.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "COrIGf5b.js",
+    "name": "docs",
+    "src": "pages/docs.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ]
+  },
+  "pages/index.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "Br8g5joS.js",
+    "name": "index",
+    "src": "pages/index.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_ZdkTQECz.js",
+      "node_modules/nuxt/dist/app/entry.js",
+      "_DlAUqK2U.js"
+    ]
+  },
+  "pages/keys.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "DrWoyshn.js",
+    "name": "keys",
+    "src": "pages/keys.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ],
+    "dynamicImports": [
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js"
+    ]
+  },
+  "pages/login.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "DG9uBC0M.js",
+    "name": "login",
+    "src": "pages/login.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_ZdkTQECz.js",
+      "node_modules/nuxt/dist/app/entry.js",
+      "_DlAUqK2U.js"
+    ]
+  },
+  "pages/models.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "BnRWpZq9.js",
+    "name": "models",
+    "src": "pages/models.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ]
+  },
+  "pages/request.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "BuYZqFIW.js",
+    "name": "request",
+    "src": "pages/request.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ],
+    "dynamicImports": [
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "node_modules/sweetalert2/dist/sweetalert2.esm.all.js"
+    ]
+  },
+  "pages/status.vue": {
+    "resourceType": "script",
+    "module": true,
+    "prefetch": true,
+    "preload": true,
+    "file": "UUx2CrAz.js",
+    "name": "status",
+    "src": "pages/status.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "node_modules/nuxt/dist/app/entry.js"
+    ]
   }
 }

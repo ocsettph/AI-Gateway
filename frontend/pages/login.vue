@@ -17,9 +17,9 @@
                 class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-200/70 dark:bg-white/10 border border-black/5 dark:border-white/10 shadow-sm mx-2 select-none align-middle"
               >
                 <span class="flex h-7 w-7 items-center justify-center ">
-                  <img :src="base + 'assets/icon.png'" alt="UBU AI FLOW" class="h-5 w-5 object-contain" />
+                  <img :src="base + 'assets/icon.png'" alt="UBU AI SERVICE" class="h-5 w-5 object-contain" />
                 </span>
-                <span class="text-gray-800 dark:text-gray-100 font-semibold tracking-wide">UBU AI FLOW</span>
+                <span class="text-gray-800 dark:text-gray-100 font-semibold tracking-wide">UBU AI SERVICE</span>
               </span>
               a
             </h1>
@@ -59,7 +59,7 @@
 
 <script setup lang="ts">
 import { useHead, useRuntimeConfig } from 'nuxt/app'
-useHead({ title: 'Login - UBU AI FLOW' })
+useHead({ title: 'Login - UBU AI SERVICE' })
 
 const startLogin = () => {
   const apiBase = (useRuntimeConfig().public.apiBase as string)
