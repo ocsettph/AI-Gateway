@@ -110,7 +110,7 @@ export default {
     "module": true,
     "prefetch": true,
     "preload": true,
-    "file": "BCTpd6EE.js",
+    "file": "BORvD22I.js",
     "name": "entry",
     "src": "node_modules/nuxt/dist/app/entry.js",
     "isEntry": true,
@@ -120,11 +120,11 @@ export default {
       "node_modules/nuxt/dist/app/components/error-500.vue"
     ],
     "css": [
-      "entry.C1DYZNrn.css"
+      "entry.C__4HEag.css"
     ]
   },
-  "entry.C1DYZNrn.css": {
-    "file": "entry.C1DYZNrn.css",
+  "entry.C__4HEag.css": {
+    "file": "entry.C__4HEag.css",
     "resourceType": "style",
     "prefetch": true,
     "preload": true
@@ -274,7 +274,7 @@ export default {
     "module": true,
     "prefetch": true,
     "preload": true,
-    "file": "Br8g5joS.js",
+    "file": "D_yYRqtM.js",
     "name": "index",
     "src": "pages/index.vue",
     "isDynamicEntry": true,

@@ -27,14 +27,14 @@ const services: ServiceOption[] = [
     title: "UBU n8n",
     href: "https://35.193.131.93/n8n",
     icon: "N8n-logo-new.svg",
-    description: "ระบบอัตโนมัติ Workflow",
+    description: "Workflow Automation",
     external: true,
   },
   {
     title: "UBU Dify",
     href: "https://35.193.131.93/dify",
     icon: "dify-logo.png",
-    description: "แพลตฟอร์มพัฒนาแอป AI",
+    description: "Generative AI (LLMs)",
     external: true,
   },
 ]
