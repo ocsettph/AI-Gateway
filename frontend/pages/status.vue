@@ -316,10 +316,10 @@ function number(n: any) {
 
 function money(n: any) {
   const v = Number(n || 0)
-  if (!isFinite(v) || v === 0) return '0.00'
-  // Show more decimal places for small values to see actual cost
-  if (v > 0 && v < 0.0001) return v.toFixed(6)
-  if (v > 0 && v < 0.01) return v.toFixed(4)
+  if (!isFinite(v)) return '0.00'
+  // แสดงทศนิยมละเอียดสำหรับจำนวนเงินเล็ก ๆ
+  if (v === 0) return '0.0000'
+  if (v > 0 && v < 1) return v.toFixed(6) // ใช้ 6 ตำแหน่งถ้าน้อยกว่า 1 USD
   return v.toFixed(2)
 }
 

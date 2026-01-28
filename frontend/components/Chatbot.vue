@@ -48,14 +48,14 @@
   <button
     v-if="!isOpen && !isVisible"
     @click="isVisible = true"
-    class="fixed bottom-6 right-6 z-50 w-12 h-12 md:w-14 md:h-14 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-110 cursor-pointer"
+    class="fixed bottom-6 right-6 z-50 flex items-center justify-center transition-all duration-300 hover:scale-110 cursor-pointer bg-transparent shadow-none"
     aria-label="แสดงน้องยูบี"
     title="แสดงน้องยูบี"
   >
     <img
       :src="base + 'assets/UB_AIBot_V2.png'"
       alt="น้องยูบี"
-      class="w-8 h-8 md:w-10 md:h-10 object-contain"
+      class="w-10 h-10 md:w-12 md:h-12 object-contain"
     />
     <span
       v-if="hasNewMessage"

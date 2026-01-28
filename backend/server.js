@@ -2392,7 +2392,9 @@ app.get('/api/admin/usage/user/:userId', async (req, res) => {
       try {
         // Build date conditions with proper parameter indices
         const dateCond = [];
-        const params = [key.id]; // $1 for key.id (used in both api_key_id and key_id checks)
+        // ใช้ text เพื่อหลีกเลี่ยงปัญหา integer = uuid (cast ทั้งสองฝั่งเป็น text)
+        const keyIdText = String(key.id);
+        const params = [keyIdText]; // $1 for key id (as text)
         let paramIdx = 2;
         
         if (start) {
@@ -2413,7 +2415,7 @@ app.get('/api/admin/usage/user/:userId', async (req, res) => {
                  COALESCE(SUM(aul.tokens_output),0) as tokens_out,
                  COALESCE(SUM(aul.cost_usd),0) as cost_usd
           FROM api_usage_logs aul
-          WHERE (aul.api_key_id = $1 OR aul.key_id = $1) ${dateWhere}
+          WHERE (aul.api_key_id::text = $1 OR aul.key_id::text = $1) ${dateWhere}
           GROUP BY aul.model
           ORDER BY cost_usd DESC
         `;
@@ -2424,7 +2426,7 @@ app.get('/api/admin/usage/user/:userId', async (req, res) => {
         const checkQuery = `
           SELECT COUNT(*) as count
           FROM api_usage_logs aul
-          WHERE (aul.api_key_id = $1 OR aul.key_id = $1) ${dateWhere}
+          WHERE (aul.api_key_id::text = $1 OR aul.key_id::text = $1) ${dateWhere}
         `;
         const checkResult = await client.query(checkQuery, params);
         console.log('🔍 [admin/usage/user] Total usage logs for key', key.id, ':', checkResult.rows[0]?.count || 0);
@@ -2452,7 +2454,7 @@ app.get('/api/admin/usage/user/:userId', async (req, res) => {
                  COALESCE(SUM(aul.tokens_input),0) as tokens_in,
                  COALESCE(SUM(aul.tokens_output),0) as tokens_out
           FROM api_usage_logs aul
-          WHERE (aul.api_key_id = $1 OR aul.key_id = $1) ${dateWhere}
+          WHERE (aul.api_key_id::text = $1 OR aul.key_id::text = $1) ${dateWhere}
         `;
         const total = await client.query(totalQuery, params);
         console.log('🔍 [admin/usage/user] Total for key', key.id, ':', total.rows[0]);

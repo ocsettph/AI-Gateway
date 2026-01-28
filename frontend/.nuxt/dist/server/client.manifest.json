@@ -99,7 +99,7 @@
     "module": true,
     "prefetch": true,
     "preload": true,
-    "file": "CjD_LtlS.js",
+    "file": "BmyXutSI.js",
     "name": "entry",
     "src": "node_modules/nuxt/dist/app/entry.js",
     "isEntry": true,
@@ -109,11 +109,11 @@
       "node_modules/nuxt/dist/app/components/error-500.vue"
     ],
     "css": [
-      "entry.Ckjy-ePr.css"
+      "entry.LrRLcss_.css"
     ]
   },
-  "entry.Ckjy-ePr.css": {
-    "file": "entry.Ckjy-ePr.css",
+  "entry.LrRLcss_.css": {
+    "file": "entry.LrRLcss_.css",
     "resourceType": "style",
     "prefetch": true,
     "preload": true
@@ -352,7 +352,7 @@
     "module": true,
     "prefetch": true,
     "preload": true,
-    "file": "DnXiTwJ1.js",
+    "file": "BkhqKb7P.js",
     "name": "status",
     "src": "pages/status.vue",
     "isDynamicEntry": true,
