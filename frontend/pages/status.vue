@@ -121,7 +121,7 @@
                 <td class="py-2 pr-4">{{ row.model || '-' }}</td>
                 <td class="py-2 pr-4">{{ row.calls }}</td>
                 <td class="py-2 pr-4">{{ row.tokens_in }} / {{ row.tokens_out }}</td>
-                <td class="py-2 pr-4">${{ Number(row.cost_usd || 0).toFixed(2) }}</td>
+                <td class="py-2 pr-4">${{ money(row.cost_usd) }}</td>
               </tr>
               <tr v-if="!modelsUsage || modelsUsage.length===0">
                 <td colspan="7" class="py-4 text-center text-gray-500 dark:text-gray-400">ไม่มีข้อมูลสถิติในช่วงที่เลือก</td>
@@ -262,7 +262,8 @@ const facultyOptions = computed(() => {
 const loadStatus = async () => {
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    const res = await $fetch<{ serverTime?: string }>(`${apiBase}/api/status`)
+    const apiPath = apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/status` : `${apiBase}/api/status`
+    const res = await $fetch<{ serverTime?: string }>(apiPath)
     serverTime.value = res?.serverTime ?? ''
   } catch {}
 }
@@ -275,7 +276,8 @@ const loadOverview = async () => {
     if (adminSearchQuery.value) params.q = adminSearchQuery.value
     if (adminFilterFaculty.value) params.faculty = adminFilterFaculty.value
     console.log('🔍 [frontend] Loading overview with params:', params)
-    const res = await $fetch(`${apiBase}/api/admin/usage`, { params, credentials: 'include' }) as any
+    const apiPath = apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/admin/usage` : `${apiBase}/api/admin/usage`
+    const res = await $fetch(apiPath, { params, credentials: 'include' }) as any
     console.log('🔍 [frontend] Overview response:', res)
     overview.value = res.items || []
     console.log('🔍 [frontend] Overview items count:', overview.value.length)
@@ -289,16 +291,17 @@ onMounted(async () => {
   await loadStatus()
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    const me: any = await $fetch(`${apiBase}/api/me`, { credentials: 'include' })
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    const me: any = await $fetch(buildApiPath('me'), { credentials: 'include' })
     isAdmin.value = me?.user?.role === 'ADMIN'
     // load user's keys to show per-API usage/services
     try {
-      const k = await $fetch(`${apiBase}/api/keys`, { credentials: 'include' }) as any
+      const k = await $fetch(buildApiPath('keys'), { credentials: 'include' }) as any
       keys.value = k?.keys || []
       // Load precise used cost per key for high-precision display
       await Promise.all(keys.value.map(async (it: any) => {
         try {
-          const u: any = await $fetch(`${apiBase}/api/keys/usage`, { params: { value: it.key_value }, credentials: 'include' })
+          const u: any = await $fetch(buildApiPath('keys/usage'), { params: { value: it.key_value }, credentials: 'include' })
           it._used = Number(u?.total?.cost_usd || 0)
         } catch { it._used = Number(it.current_spend || 0) }
       }))
@@ -314,6 +317,8 @@ function number(n: any) {
 function money(n: any) {
   const v = Number(n || 0)
   if (!isFinite(v) || v === 0) return '0.00'
+  // Show more decimal places for small values to see actual cost
+  if (v > 0 && v < 0.0001) return v.toFixed(6)
   if (v > 0 && v < 0.01) return v.toFixed(4)
   return v.toFixed(2)
 }
@@ -361,11 +366,12 @@ async function loadKeyUsage() {
   usageLoading.value = true
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
     const params: any = {}
     if (filterStart.value) params.start = filterStart.value
     if (filterEnd.value) params.end = filterEnd.value
     const keyVal = selectedKey.value?.key_value
-    const res = await $fetch(`${apiBase}/api/keys/usage`, { params: { ...params, value: keyVal }, credentials: 'include' }) as any
+    const res = await $fetch(buildApiPath('keys/usage'), { params: { ...params, value: keyVal }, credentials: 'include' }) as any
     keyUsage.value = res || { by_model: [], total: {} }
   } catch {
     keyUsage.value = { by_model: [], total: {} }
@@ -410,7 +416,8 @@ async function loadModelsUsage() {
     if (adminStart.value) params.start = adminStart.value
     if (adminEnd.value) params.end = adminEnd.value
     if (filterModel.value) params.model = filterModel.value
-    const res = await $fetch(`${apiBase}/api/admin/usage/models`, { params, credentials: 'include' }) as any
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    const res = await $fetch(buildApiPath('admin/usage/models'), { params, credentials: 'include' }) as any
     modelsUsage.value = res?.items || []
   } catch {
     modelsUsage.value = []

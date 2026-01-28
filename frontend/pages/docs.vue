@@ -17,6 +17,8 @@
                             <a :href="'#api-keys'" :class="linkClass('api-keys')">API Keys</a>
                             <a :href="'#authentication'" :class="linkClass('authentication')">Authentication</a>
                             <a :href="'#endpoints'" :class="linkClass('endpoints')">API Endpoints</a>
+                            <!-- <a :href="'#n8n-dify'" :class="linkClass('n8n-dify')">n8n & Dify</a> -->
+                            <a :href="'#n8n'" :class="linkClass('n8n')">n8n Integration</a>
                             <a :href="'#examples'" :class="linkClass('examples')">Examples</a>
                             <a :href="'#troubleshooting'" :class="linkClass('troubleshooting')">Troubleshooting</a>
                         </nav>
@@ -155,6 +157,98 @@
 							</div>
 						</section>
 
+						<!-- n8n Integration -->
+						<section id="n8n" class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
+							<h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-4">การใช้งานกับ n8n</h2>
+							<p class="text-gray-600 dark:text-gray-300 mb-6">คู่มือการเชื่อมต่อ UBU AI SERVICE กับ n8n เพื่อใช้งาน AI models</p>
+							
+							<div class="space-y-6">
+								<!-- n8n Section -->
+								<div class="border-l-4 border-blue-500 pl-4">
+									<h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-3">n8n Integration</h3>
+									
+									<div class="space-y-4 mb-6">
+										<div>
+											<h4 class="font-medium text-gray-900 dark:text-white mb-2">1. ตั้งค่า OpenAI Node ใน n8n</h4>
+											<div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-3">
+												<p class="text-sm text-gray-600 dark:text-gray-300 mb-2">ใน n8n workflow:</p>
+												<ol class="list-decimal list-inside text-sm text-gray-600 dark:text-gray-300 space-y-1">
+													<li>เพิ่ม <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">OpenAI</code> node</li>
+													<li>เลือก <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">Chat Model</code> operation</li>
+													<li>ตั้งค่า <strong>Base URL:</strong> <code class="text-blue-600 dark:text-blue-400">{{ docsBase }}</code></li>
+													<li>ตั้งค่า <strong>API Key:</strong> ใช้ API Key จาก UBU AI SERVICE</li>
+												</ol>
+											</div>
+										</div>
+										
+										<div>
+											<h4 class="font-medium text-gray-900 dark:text-white mb-2">2. เลือกโมเดล</h4>
+											<div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-3">
+												<p class="text-sm text-gray-600 dark:text-gray-300 mb-2">n8n จะดึงรายการโมเดลจาก:</p>
+												<code class="text-blue-600 dark:text-blue-400 block mb-2">{{ docsBase }}/models</code>
+												<p class="text-sm text-gray-600 dark:text-gray-300">คุณสามารถเลือกโมเดลได้จากรายการที่แสดง เช่น:</p>
+												<ul class="list-disc list-inside text-sm text-gray-600 dark:text-gray-300 mt-2 space-y-1">
+													<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">gpt-4o-mini</code> - โมเดล GPT-4o แบบย่อ</li>
+													<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">google/gemini-2.5-flash</code> - Google Gemini Flash</li>
+													<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">anthropic/claude-3.5-sonnet</code> - Claude 3.5 Sonnet</li>
+													<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">meta-llama/llama-3.2-3b-instruct:free</code> - Llama 3.2 (ฟรี)</li>
+												</ul>
+											</div>
+										</div>
+										
+										<div>
+											<h4 class="font-medium text-gray-900 dark:text-white mb-2">3. ตัวอย่างการตั้งค่า</h4>
+											<div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+												<pre class="text-green-400 text-sm"><code>Base URL: {{ docsBase }}
+API Key: ubu_xxxxxxxxxxxxxxxxxxxxx
+Model: gpt-4o-mini
+Messages:
+  - role: user
+    content: "สวัสดีครับ"</code></pre>
+											</div>
+										</div>
+									</div>
+								</div>
+								
+								<!-- Available Models -->
+								<div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+									<h4 class="font-medium text-gray-900 dark:text-white mb-2">โมเดลที่รองรับ</h4>
+									<div class="grid md:grid-cols-2 gap-3 text-sm">
+										<div>
+											<p class="font-medium text-gray-900 dark:text-white mb-1">โมเดลฟรี:</p>
+											<ul class="list-disc list-inside text-gray-600 dark:text-gray-300 space-y-1">
+												<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">google/gemini-flash-1.5-8b</code></li>
+												<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">meta-llama/llama-3.2-3b-instruct:free</code></li>
+												<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">mistralai/mistral-7b-instruct:free</code></li>
+											</ul>
+										</div>
+										<div>
+											<p class="font-medium text-gray-900 dark:text-white mb-1">โมเดลยอดนิยม:</p>
+											<ul class="list-disc list-inside text-gray-600 dark:text-gray-300 space-y-1">
+												<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">gpt-4o-mini</code></li>
+												<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">google/gemini-2.5-flash</code></li>
+												<li><code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">anthropic/claude-3.5-sonnet</code></li>
+											</ul>
+										</div>
+									</div>
+									<p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+										ดูรายการโมเดลทั้งหมดได้ที่: <code class="text-blue-600 dark:text-blue-400">{{ docsBase }}/models</code>
+									</p>
+								</div>
+								
+								<!-- Important Notes -->
+								<div class="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
+									<h4 class="font-medium text-gray-900 dark:text-white mb-2">⚠️ ข้อควรระวัง</h4>
+									<ul class="list-disc list-inside text-sm text-gray-600 dark:text-gray-300 space-y-1">
+										<li>ใช้ API Key ที่ได้รับจาก UBU AI SERVICE เท่านั้น</li>
+										<li>ตรวจสอบ credit limit ของ API Key ก่อนใช้งาน</li>
+										<li>โมเดลฟรีอาจมี rate limit ต่ำกว่าโมเดลแบบเสียเงิน</li>
+										<li>สำหรับ n8n: ใช้ <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">OpenAI</code> node และตั้งค่า Base URL เป็น <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">{{ docsBase }}</code></li>
+									</ul>
+								</div>
+							</div>
+						</section>
+
 						<!-- Examples -->
 						<section id="examples" class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
 							<h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-4">Examples</h2>
@@ -225,14 +319,26 @@ const docsBase = computed(() => {
   const apiBase = useRuntimeConfig().public.apiBase as string
   // absolute base if already starts with http
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const base = /^https?:/i.test(apiBase) ? apiBase : `${origin}${apiBase}`
-  return `${base}/api/v1`
+  
+  // If apiBase is already absolute (starts with http), use it directly
+  if (/^https?:/i.test(apiBase)) {
+    // For dev: apiBase is like "http://localhost:4000"
+    // Backend v1 endpoints are at /api/v1
+    return `${apiBase}/api/v1`
+  }
+  
+  // For production: apiBase is "/api"
+  // Backend v1 endpoints are at /api/v1 (not /api/api/v1)
+  // So we just need to add /v1 to the apiBase
+  const base = `${origin}${apiBase}`
+  return `${base}/v1`
 })
 
 const loadModels = async () => {
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    const res = await $fetch(`${apiBase}/api/models`, { credentials: 'include' }) as { models: any[] }
+    const apiPath = apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/models` : `${apiBase}/api/models`
+    const res = await $fetch(apiPath, { credentials: 'include' }) as { models: any[] }
     models.value = res.models || []
     if (models.value.length && !selectedModel.value) selectedModel.value = models.value[0].id
   } catch {}
@@ -281,7 +387,7 @@ console.log(data);`)
 
 // Sidebar active link handling
 const currentSection = ref<string>('getting-started')
-const ids = ['getting-started','api-keys','authentication','endpoints','examples','troubleshooting']
+const ids = ['getting-started','api-keys','authentication','endpoints','n8n','examples','troubleshooting']
 
 const linkClass = (id: string) => {
   return [

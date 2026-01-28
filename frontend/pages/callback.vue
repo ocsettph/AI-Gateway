@@ -124,13 +124,14 @@ onMounted(async () => {
           null
 
         const apiBase = (useRuntimeConfig().public.apiBase as string)
+        const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
         
         if (username) {
             // บางระบบจะส่ง username กลับมาที่ callback ได้เลย
-            await $fetch(`${apiBase}/api/oauth-login`, { method: 'POST', body: { username }, credentials: 'include' })
+            await $fetch(buildApiPath('oauth-login'), { method: 'POST', body: { username }, credentials: 'include' })
         } else if (code || accessToken) {
             // บางระบบส่ง code มา ต้องให้ backend แลกเป็น session
-            await $fetch(`${apiBase}/api/oauth/callback`, { method: 'POST', body: { code, accessToken }, credentials: 'include' })
+            await $fetch(buildApiPath('oauth/callback'), { method: 'POST', body: { code, accessToken }, credentials: 'include' })
         } else {
             throw new Error('ไม่พบข้อมูลจาก UBU Portal (username/code)')
         }

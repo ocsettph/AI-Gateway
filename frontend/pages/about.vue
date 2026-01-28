@@ -19,21 +19,16 @@
             />
           </div>
           <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            ฝ่ายพัฒนาซอฟต์แวร์ OCN UBU
+            ฝ่ายเทคโนโลยีดิจิทัล ODL UBU
           </h3>
           <p class="text-gray-600 dark:text-gray-300 mb-4">
-            ทีมพัฒนาซอฟต์แวร์สำนักคอมพิวเตอร์และเครือข่าย มหาวิทยาลัยอุบลราชธานี
+            สำนักเทคโนโลยีดิจิทัลและทรัพยากรการเรียนรู้ มหาวิทยาลัยอุบลราชธานี
           </p>
           <div class="flex justify-center space-x-4">
             <a
-              href="mailto:ocn@ubu.ac.th"
+              href="mailto:odl@ubu.ac.th"
               class="text-blue-600 dark:text-blue-400 hover:underline"
-              >ocn@ubu.ac.th</a
-            >
-            <a
-              href="https://ocn.ubu.ac.th"
-              class="text-blue-600 dark:text-blue-400 hover:underline"
-              >ocn.ubu.ac.th</a
+              >odl.ubu.ac.th</a
             >
           </div>
         </div>

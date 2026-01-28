@@ -1,0 +1,933 @@
+{
+  "name": "UBU AI Service Web Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "dataType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1264,
+        432
+      ],
+      "id": "94505ac0-f197-4fdf-9bd0-4798b82060c9",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "content": "### 📚 Load Data Flow",
+        "height": 636,
+        "width": 1676,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -144,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "412ce213-b10a-4fe7-976f-949ba0c14bf9",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput || $json.body?.message?.text || $json.body?.message?.argumentText }}",
+        "options": {
+          "systemMessage": "คุณคือผู้ช่วยอัจฉริยะประจำ UBU AI SERVICE มีชื่อว่า น้องยูบี หน้าที่เดียวของคุณคือการตอบคำถามโดยใช้ข้อมูลจากเครื่องมือ \"search_knowledge\" เท่านั้น\n\nกฎเหล็ก (Strict Rules):\n1. **ต้องใช้เครื่องมือค้นหาทุกครั้ง:** ไม่ว่าคำถามจะดูง่ายแค่ไหน หรือดูเหมือนถามเรื่องเดิม คุณต้องกดใช้เครื่องมือ \"search_knowledge\" เพื่อดึงข้อมูลมายืนยันคำตอบเสมอ ห้ามตอบเองเด็ดขาด\n2. **ห้ามปฏิเสธ:** ห้ามตอบว่า \"ฉันไม่สามารถให้ข้อมูลได้\" หรือ \"กรุณาระบุข้อมูลเพิ่มเติม\" ถ้าคุณยังไม่ได้ลองกดค้นหาดู\n3. **เชื่อมโยงบริบท:** ถ้าผู้ใช้ถามสั้นๆ เช่น \"ราคาเท่าไหร่\" หรือ \"มีกี่คน\" ให้เข้าใจว่าเขาถามต่อเนื่องจากเรื่องก่อนหน้า ให้ใช้คำค้นหาจากเรื่องก่อนหน้าไปค้นในเครื่องมือทันที\n4. **การคำนวณ:** ถ้าในเอกสารมีราคา \"รวม\" (Total) และ \"จำนวน\" (Quantity) แต่ผู้ใช้ถามราคา \"ต่อหน่วย\" (Unit Price) ให้คุณช่วยคำนวณหารเลขให้ผู้ใช้ได้เลย (Total / Quantity)\n5. **ภาษา:** ตอบเป็นภาษาไทยที่สุภาพ กระชับ และเข้าใจง่าย"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        240
+      ],
+      "id": "f0dc45fb-4bda-4e07-a776-add74ca461e5",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "google/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "google/gemini-2.5-flash"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        800
+      ],
+      "id": "186a4785-b998-4753-bba6-c1941a77b7a3",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "QqVFkDv7r80Ktp04",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "### 🐕 2. Retriever Flow",
+        "height": 636,
+        "width": 760,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1632,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "6ce45810-8c5d-404d-a4d5-879f543eb147",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "n8n",
+          "mode": "list",
+          "cachedResultName": "n8n"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        1024,
+        288
+      ],
+      "id": "93541615-6ace-401e-821f-cdc78c187862",
+      "name": "Pinecone Vector Store",
+      "credentials": {
+        "pineconeApi": {
+          "id": "mlbyg2toKUU0U2LN",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/text-embedding-3-small",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1584,
+        800
+      ],
+      "id": "0a4f6282-323d-41cb-8c68-dbaba5ff4f7a",
+      "name": "Embeddings OpenAI1",
+      "credentials": {
+        "openAiApi": {
+          "id": "QqVFkDv7r80Ktp04",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "This provides access to the organization's internal knowledge base, documents, reports, price lists, personnel information, and history.\nALWAYS use this tool for ANY question related to the organization, specific facts, numbers, prices, names, or dates.\nDo not answer from your own memory; strictly use the information retrieved from this tool.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "n8n",
+          "mode": "list",
+          "cachedResultName": "n8n"
+        },
+        "topK": 20,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        2256,
+        800
+      ],
+      "id": "745e49b5-85cc-4984-a263-b317134db5ff",
+      "name": "search_knowledge",
+      "credentials": {
+        "pineconeApi": {
+          "id": "mlbyg2toKUU0U2LN",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        144,
+        256
+      ],
+      "id": "bd17457b-eea7-4938-9311-a5d82437c9f6",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "3BAoxIcb2oW8km12",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "='1dsxtbrBKfkOe1HhiL-o0KFxHEYT9RkdU' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -80,
+        256
+      ],
+      "id": "9c1c37c0-e003-44be-9882-d7e46859890f",
+      "name": "Search files and folders1",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "3BAoxIcb2oW8km12",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.data.mimeType }}",
+                    "rightValue": "image/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    },
+                    "id": "35fce690-064b-4438-8204-f43dfa9a354f"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "56d1fc54-c016-4a62-b65f-fa93b26aac73",
+                    "leftValue": "={{ $binary.data.mimeType }}",
+                    "rightValue": "application/pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d0bd321c-d436-488a-9ec2-96f034df34e8",
+                    "leftValue": "={{ $binary.data.mimeType }}",
+                    "rightValue": "image/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notStartsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        352,
+        240
+      ],
+      "id": "dbbecca4-c3a0-4029-8f01-ab138c4a013b",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are a Document Extraction AI.\nExtract data from this document row by row.\nDo NOT format as a markdown table (to avoid column merging errors).\n\nInstead, format each item clearly like this:\n---\nItem: [Product Description]\nQty: [Quantity Number]\nUnit Price: [Price per unit]\nTotal: [Total Amount]\n---\n\nSTRICT RULES:\n1. **Separation:** You must identify \"Quantity\" (8) and \"Unit Price\" (9,450) separately. NEVER merge them into one number like \"89450\".\n2. Look for visual gaps between numbers.\n3. Extract all items found in the document.\n4. Keep the original Thai/English text for descriptions.",
+        "options": {
+          "passthroughBinaryImages": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        592,
+        32
+      ],
+      "id": "022b8de8-62f8-47c2-977e-e77c6f7424c0",
+      "name": "OCR"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "907540ca-bc0f-41c4-bb62-aaa2d1158dfb",
+              "name": "pageContent",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        944,
+        32
+      ],
+      "id": "287c08bc-0667-4fbe-82e1-9ac3cc8b171b",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "content": "### 3.UBU AI GATEWAY",
+        "height": 272,
+        "width": 720,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        720
+      ],
+      "id": "9c516216-2e80-4c60-8012-f74c13fb794e",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        1712,
+        240
+      ],
+      "id": "cf3653ef-e90a-43ea-8fcf-a0ac537fa89c",
+      "name": "When chat message received",
+      "webhookId": "81ef28bc-c968-4ce4-aa99-606fffa9e1f2"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "n8n",
+          "mode": "list",
+          "cachedResultName": "n8n"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        1216,
+        32
+      ],
+      "id": "edbf2d52-24bd-479b-9bbc-6a6d18090bb9",
+      "name": "Pinecone Vector Store OCR",
+      "credentials": {
+        "pineconeApi": {
+          "id": "mlbyg2toKUU0U2LN",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.pageContent }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1392,
+        224
+      ],
+      "id": "ec3d124e-710c-42d8-9581-a5436393042b",
+      "name": "Default Data Loader OCR"
+    },
+    {
+      "parameters": {
+        "content": "### 4. API UBU AI GATEWAY",
+        "height": 640,
+        "width": 1248
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2480,
+        0
+      ],
+      "id": "d450069b-11bd-442c-9c3b-ba9418201fea",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/chat",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        2528,
+        80
+      ],
+      "id": "5e48b738-0e1e-4e45-998a-7c9915e41b3f",
+      "name": "Webhook",
+      "webhookId": "153dc85a-8abe-4ded-9674-e6293a49be79"
+    },
+    {
+      "parameters": {
+        "url": "https://dev2.ubu.ac.th/ai_gateway_api/api/chatbot/usage",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "userEmail",
+              "value": "={{$json.userEmail}}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3328,
+        64
+      ],
+      "id": "09062146-446e-4b23-8b58-e81be6e4c4e0",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f9305ae6-69e3-4bcf-b45c-3ac5788d70cb",
+              "name": "chatInput",
+              "value": "={{ $json.body.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "a6612539-6ce6-47a7-9613-90903c72aaf3",
+              "name": "userEmail",
+              "value": "={{ $json.body.userEmail }}",
+              "type": "string"
+            },
+            {
+              "id": "7f7db129-4e45-4f32-b893-5560c210db23",
+              "name": "apiBase",
+              "value": "={{ $json.body.apiBase }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3104,
+        64
+      ],
+      "id": "38541d83-31f5-4cd9-8301-290ac62984f9",
+      "name": "SET NODE"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "66f766b3-fb51-4145-9d66-1c83754c707c",
+              "name": "userInfo",
+              "value": "=ผู้ใช้: {{$json.user.fullname}} ({{$json.user.email}}), User ID: {{$json.user.id}}",
+              "type": "string"
+            },
+            {
+              "id": "03b995b5-b71d-4f3d-b9f7-ee61a3939845",
+              "name": "creditInfo",
+              "value": "=คุณมี credit limit ทั้งหมด {{$json.summary.total_limit}} USD, ใช้ไปแล้ว {{$json.summary.total_used}} USD, เหลือ {{$json.summary.remaining}} USD",
+              "type": "string"
+            },
+            {
+              "id": "bd9df841-3c6a-4f53-846a-1b18ad3705fd",
+              "name": "keysInfo",
+              "value": "=คุณมี API keys ทั้งหมด {{$json.summary.keys_count}}",
+              "type": "string"
+            },
+            {
+              "id": "ed99ecfe-e010-4c7a-b3d0-ef5ad7e60c19",
+              "name": "keysDetail",
+              "value": "={{$json.keys.map(k => k.name + ': limit ' + k.credit_limit + ' USD, ใช้ไป ' + k.used + ' USD, เหลือ ' + k.remaining + ' USD, สถานะ ' + (k.is_active ? 'ใช้งานได้' : 'ปิดการใช้งาน')).join('; ')}}",
+              "type": "string"
+            },
+            {
+              "id": "a0b94fd8-1d53-4b9a-ac2a-bf55168b1553",
+              "name": "summaryDetail",
+              "value": "=สรุป: Total Limit {{$json.summary.total_limit}} USD, Total Used {{$json.summary.total_used}} USD, Remaining {{$json.summary.remaining}} USD, จำนวน API Keys {{$json.summary.keys_count}} ",
+              "type": "string"
+            },
+            {
+              "id": "50f5df88-5eeb-47a7-a622-7a8f000680a4",
+              "name": "chatInput",
+              "value": "={{ $('SET NODE').item.json.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "b63cd2c5-2996-4ec6-b85e-4c932cb42325",
+              "name": "userEmail",
+              "value": "={{ $('SET NODE').item.json.userEmail }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3568,
+        64
+      ],
+      "id": "79d83d44-fbcf-4ad7-8460-ad753cac1594",
+      "name": "Set Node Request"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput || $json.body?.message?.text || $json.body?.message?.argumentText }}",
+        "options": {
+          "systemMessage": "={{$json.creditInfo ? 'คุณคือ AI Assistant ชื่อ \\\\\\\"น้องยูบี\\\\\\\" สำหรับ UBU AI SERVICE\\\\\\\\n\\\\\\\\nข้อมูลเกี่ยวกับระบบ:\\\\\\\\n- UBU AI SERVICE เป็น AI Gateway ที่ให้บริการ API สำหรับใช้งาน AI models ต่างๆ\\\\\\\\n- ผู้ใช้สามารถสร้าง API Key เพื่อใช้งาน API ได้\\\\\\\\n- แต่ละ API Key มี credit limit ที่กำหนดไว้\\\\\\\\n\\\\\\\\nข้อมูลผู้ใช้:\\\\\\\\n- ' + ($json.userInfo || '') + '\\\\\\\\n\\\\\\\\nข้อมูล credit:\\\\\\\\n- ' + $json.creditInfo + '\\\\\\\\n- ' + $json.keysInfo + '\\\\\\\\n- ' + ($json.summaryDetail || '') + '\\\\\\\\n\\\\\\\\nรายละเอียด API Keys:\\\\\\\\n- ' + ($json.keysDetail || 'ไม่มี API Keys') + '\\\\\\\\n\\\\\\\\nกฎเหล็ก (Strict Rules):\\\\\\\\n1. **ต้องใช้เครื่องมือ search_knowledge ทุกครั้ง:** ไม่ว่าคำถามจะดูง่ายแค่ไหน หรือดูเหมือนถามเรื่องเดิม คุณต้องกดใช้เครื่องมือ \\\\\\\"search_knowledge\\\\\\\" เพื่อดึงข้อมูลมายืนยันคำตอบเสมอ ห้ามตอบเองเด็ดขาด\\\\\\\\n2. **เมื่อผู้ใช้ถามเกี่ยวกับข้อมูลส่วนตัว** (ชื่อ, email, credit, usage, API keys, ข้อมูลบัญชี) **ให้ใช้ข้อมูลด้านบนตอบทันที** แต่ยังต้องใช้ search_knowledge tool เพื่อค้นหาข้อมูลเพิ่มเติมเกี่ยวกับระบบ\\\\\\\\n3. **เมื่อผู้ใช้ถามคำถามทั่วไป** (เกี่ยวกับ UBU AI SERVICE, วิธีการใช้งาน, เอกสาร) ให้ใช้เครื่องมือ \\\\\\\"search_knowledge\\\\\\\" เพื่อค้นหาข้อมูล\\\\\\\\n4. **เมื่อ search_knowledge ไม่เจอข้อมูล:** ถ้าเครื่องมือ search_knowledge ไม่พบข้อมูลที่เกี่ยวข้อง ให้ตอบว่า \\\\\\\"ขออภัยครับ ผมสามารถตอบคำถามได้เฉพาะเรื่อง UBU AI SERVICE Gateway เท่านั้นครับ เช่น การใช้งาน API, การสร้าง API Key, Credit Management, หรือข้อมูลเกี่ยวกับระบบ UBU AI SERVICE ครับ\\\\\\\"\\\\\\\\n5. **ห้ามตอบว่า \\\\\\\"ไม่สามารถเข้าถึงข้อมูลส่วนตัวได้\\\\\\\"** เพราะคุณมีข้อมูลผู้ใช้อยู่แล้ว\\\\\\\\n6. **ห้ามปฏิเสธ:** ห้ามตอบว่า \\\\\\\"ฉันไม่สามารถให้ข้อมูลได้\\\\\\\" หรือ \\\\\\\"กรุณาระบุข้อมูลเพิ่มเติม\\\\\\\" ถ้าคุณยังไม่ได้ลองกดค้นหาดู\\\\\\\\n7. **เชื่อมโยงบริบท:** ถ้าผู้ใช้ถามสั้นๆ เช่น \\\\\\\"ราคาเท่าไหร่\\\\\\\" หรือ \\\\\\\"มีกี่คน\\\\\\\" ให้เข้าใจว่าเขาถามต่อเนื่องจากเรื่องก่อนหน้า ให้ใช้คำค้นหาจากเรื่องก่อนหน้าไปค้นในเครื่องมือทันที\\\\\\\\n8. **การคำนวณ:** ถ้าในเอกสารมีราคา \\\\\\\"รวม\\\\\\\" (Total) และ \\\\\\\"จำนวน\\\\\\\" (Quantity) แต่ผู้ใช้ถามราคา \\\\\\\"ต่อหน่วย\\\\\\\" (Unit Price) ให้คุณช่วยคำนวณหารเลขให้ผู้ใช้ได้เลย (Total / Quantity)\\\\\\\\n9. **ภาษา:** ตอบเป็นภาษาไทยที่สุภาพ กระชับ และเข้าใจง่าย' : 'คุณคือผู้ช่วยอัจฉริยะประจำ UBU AI SERVICE มีชื่อว่า น้องยูบี หน้าที่เดียวของคุณคือการตอบคำถามโดยใช้ข้อมูลจากเครื่องมือ \\\\\\\"search_knowledge\\\\\\\" เท่านั้น\\\\\\\\n\\\\\\\\nกฎเหล็ก (Strict Rules):\\\\\\\\n1. **ต้องใช้เครื่องมือค้นหาทุกครั้ง:** ไม่ว่าคำถามจะดูง่ายแค่ไหน หรือดูเหมือนถามเรื่องเดิม คุณต้องกดใช้เครื่องมือ \\\\\\\"search_knowledge\\\\\\\" เพื่อดึงข้อมูลมายืนยันคำตอบเสมอ ห้ามตอบเองเด็ดขาด\\\\\\\\n2. **เมื่อ search_knowledge ไม่เจอข้อมูล:** ถ้าเครื่องมือ search_knowledge ไม่พบข้อมูลที่เกี่ยวข้อง ให้ตอบว่า \\\\\\\"ขออภัยครับ ผมสามารถตอบคำถามได้เฉพาะเรื่อง UBU AI SERVICE Gateway เท่านั้นครับ เช่น การใช้งาน API, การสร้าง API Key, Credit Management, หรือข้อมูลเกี่ยวกับระบบ UBU AI SERVICE ครับ\\\\\\\"\\\\\\\\n3. **ห้ามปฏิเสธ:** ห้ามตอบว่า \\\\\\\"ฉันไม่สามารถให้ข้อมูลได้\\\\\\\" หรือ \\\\\\\"กรุณาระบุข้อมูลเพิ่มเติม\\\\\\\" ถ้าคุณยังไม่ได้ลองกดค้นหาดู\\\\\\\\n4. **ข้อมูลส่วนตัว:** ถ้าผู้ใช้ถามเกี่ยวกับข้อมูลส่วนตัว เช่น ชื่อ, email, credit, usage, API keys, หรือข้อมูลบัญชี ให้บอกว่า \\\\\\\"กรุณาเข้าสู่ระบบก่อนเพื่อดูข้อมูลส่วนตัวของคุณครับ\\\\\\\" หรือ \\\\\\\"ข้อมูลนี้ต้องเข้าสู่ระบบก่อนครับ\\\\\\\"\\\\\\\\n5. **เชื่อมโยงบริบท:** ถ้าผู้ใช้ถามสั้นๆ เช่น \\\\\\\"ราคาเท่าไหร่\\\\\\\" หรือ \\\\\\\"มีกี่คน\\\\\\\" ให้เข้าใจว่าเขาถามต่อเนื่องจากเรื่องก่อนหน้า ให้ใช้คำค้นหาจากเรื่องก่อนหน้าไปค้นในเครื่องมือทันที\\\\\\\\n6. **การคำนวณ:** ถ้าในเอกสารมีราคา \\\\\\\"รวม\\\\\\\" (Total) และ \\\\\\\"จำนวน\\\\\\\" (Quantity) แต่ผู้ใช้ถามราคา \\\\\\\"ต่อหน่วย\\\\\\\" (Unit Price) ให้คุณช่วยคำนวณหารเลขให้ผู้ใช้ได้เลย (Total / Quantity)\\\\\\\\n7. **ภาษา:** ตอบเป็นภาษาไทยที่สุภาพ กระชับ และเข้าใจง่าย'}}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        2848,
+        336
+      ],
+      "id": "4c4077a1-7290-44f0-a50e-39c6e10ffa86",
+      "name": "AI Agent API"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        3216,
+        336
+      ],
+      "id": "5b7a3ce1-8333-4317-9704-2487715ca35e",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "494fa6f4-872b-497b-884b-96b5ee77125c",
+              "leftValue": "={{ $json.body.userEmail }}",
+              "rightValue": "={{ $json.body.userEmail }}",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "ignoreCase": false
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2816,
+        80
+      ],
+      "id": "072abb50-6c9b-43fc-9da6-a7af3187d57a",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "content": "### 5. Knowledge",
+        "height": 272,
+        "width": 496,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2112,
+        720
+      ],
+      "id": "981fdf0b-f1bd-430b-b044-687bd8c54230",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ef391c55-3ac4-4b2d-b1c2-10db2cacf1b7",
+              "name": "chatInput",
+              "value": "={{ $('Webhook').item.json.body.chatInput }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2560,
+        336
+      ],
+      "id": "185528f3-157c-41a0-b44a-6c2390c12e2f",
+      "name": "SET NODE False"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "OCR",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent API",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "search_knowledge",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Pinecone Vector Store OCR",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_knowledge": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent API",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search files and folders1": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "OCR",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "OCR",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Vector Store OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader OCR": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone Vector Store OCR",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Set Node Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SET NODE": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Node Request": {
+      "main": [
+        [
+          {
+            "node": "AI Agent API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent API": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "SET NODE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SET NODE False",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SET NODE False": {
+      "main": [
+        [
+          {
+            "node": "AI Agent API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f1aa7df5-a46c-47b8-998a-e51daf2394fe",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8b05ae37c9a0682ad73e7bf879269ecc7e00d7f3f85865aba4c7c194b6b70e7c"
+  },
+  "id": "MvKF4ojymeV4SOah",
+  "tags": []
+}

@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useHead, navigateTo, useRuntimeConfig } from 'nuxt/app'
+import { ref, onMounted, computed } from 'vue'
+import { useHead, navigateTo, useRuntimeConfig, useRoute } from 'nuxt/app'
 // User display name (fetched from backend session)
 const displayName = ref<string | null>(null)
 
 const fetchCurrentUser = async () => {
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    const me: any = await $fetch(`${apiBase}/api/me`, { credentials: 'include' })
+    // apiBase already includes /api prefix for production
+    const mePath = apiBase.endsWith('/api') || apiBase === '/api' 
+      ? `${apiBase}/me` 
+      : `${apiBase}/api/me`
+    const me: any = await $fetch(mePath, { credentials: 'include' })
     displayName.value = me?.user?.fullname || me?.user?.username || null
   } catch {
     displayName.value = null
@@ -17,16 +21,24 @@ const fetchCurrentUser = async () => {
 const logout = async () => {
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    await $fetch(`${apiBase}/api/logout`, { 
+    // apiBase already includes /api prefix for production
+    const logoutPath = apiBase.endsWith('/api') || apiBase === '/api' 
+      ? `${apiBase}/logout` 
+      : `${apiBase}/api/logout`
+    await $fetch(logoutPath, { 
       method: 'POST',
       credentials: 'include' 
     })
     // Clear local state and ensure name hides immediately
     displayName.value = null
+    // Dispatch logout event for chatbot to reset
+    window.dispatchEvent(new CustomEvent('user-logout'))
     // Redirect to login
     await navigateTo('/login')
   } catch (e) {
     console.error('Logout failed:', e)
+    // Still dispatch logout event even if logout fails
+    window.dispatchEvent(new CustomEvent('user-logout'))
     // Still redirect even if logout fails
     await navigateTo('/login')
   }
@@ -34,6 +46,23 @@ const logout = async () => {
 
 // base path for assets when deployed under a subdirectory
 const base = (useRuntimeConfig().public as any).basePath || '/'
+const route = useRoute()
+
+// Determine logo link based on current route
+// If on /ai-gateway page, go to home (/)
+// If on other AI Gateway pages, go to /ai-gateway
+// Otherwise go to home (/)
+const logoLink = computed(() => {
+  const path = route.path
+  // If currently on /ai-gateway page, go to home
+  if (path === '/ai-gateway' || path.startsWith('/ai-gateway/')) {
+    return '/'
+  }
+  // Check if we're in other AI Gateway related pages
+  const aiGatewayPages = ['/request', '/keys', '/status', '/docs', '/api-playground', '/about', '/admin']
+  const isInAiGatewaySection = aiGatewayPages.some(page => path.startsWith(page))
+  return isInAiGatewaySection ? '/ai-gateway' : '/'
+})
 
 onMounted(() => {
   // Ensure dark mode is removed
@@ -73,7 +102,7 @@ useHead(() => {
       <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center py-4">
           <!-- Logo and Name (clickable, animated on hover) -->
-          <NuxtLink to="/" class="flex items-center space-x-2 group cursor-pointer">
+          <NuxtLink :to="logoLink" class="flex items-center space-x-2 group cursor-pointer">
             <img :src="base + 'assets/UBU_AI_FLOW_icon.png'" alt="UBU AI SERVICE" class="h-8 w-8 object-contain group-hover:rotate-3 transition-transform duration-200">
             <span class="text-lg font-bold text-gray-900">UBU AI SERVICE</span>
           </NuxtLink>
@@ -120,5 +149,10 @@ useHead(() => {
         </div>
       </div>
     </footer>
+
+    <!-- Chatbot Component -->
+    <ClientOnly>
+      <Chatbot />
+    </ClientOnly>
   </div>
 </template>

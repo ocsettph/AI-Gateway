@@ -36,7 +36,7 @@
         <div class="mt-6 flex items-center justify-center gap-5 md:gap-6 select-none">
           <img :src="base + 'assets/Ubu_logo.png'" alt="UBU Emblem" title="UBU Emblem" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
           <img :src="base + 'assets/ubufavicon.png'" alt="UBU" title="UBU" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
-          <img :src="base + 'assets/api.png'" alt="api" title="api" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
+          <img :src="base + 'assets/api_new.png'" alt="api" title="api" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
         </div>
 
         <!-- login button below icons -->
@@ -64,7 +64,11 @@ useHead({ title: 'Login - UBU AI SERVICE' })
 const startLogin = () => {
   const apiBase = (useRuntimeConfig().public.apiBase as string)
   // ส่งไปยัง backend OAuth login
-  window.location.href = `${apiBase}/api/oauth-login`
+  // apiBase already includes /api prefix for production, so just use /oauth-login
+  const oauthLoginPath = apiBase.endsWith('/api') || apiBase === '/api' 
+    ? `${apiBase}/oauth-login` 
+    : `${apiBase}/api/oauth-login`
+  window.location.href = oauthLoginPath
 }
 
 // base path for assets when deployed under a subdirectory

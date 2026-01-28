@@ -1,26 +1,60 @@
 import { defineNuxtConfig } from "nuxt/config"
 
+// Helper function to determine base path based on environment
+function getBasePath(): string {
+  // If explicitly set via env, use it
+  if (process.env.NUXT_APP_BASE_URL) {
+    return process.env.NUXT_APP_BASE_URL;
+  }
+  
+  // For production, default to / (root path for aigateway.ubu.ac.th)
+  if (process.env.NODE_ENV === 'production') {
+    return '/';
+  }
+  
+  // Development default
+  return '/';
+}
+
+// Helper function to determine API base
+function getApiBase(): string {
+  // If explicitly set via env, use it
+  if (process.env.NUXT_PUBLIC_API_BASE) {
+    return process.env.NUXT_PUBLIC_API_BASE;
+  }
+  
+  // For production, default to /api (for aigateway.ubu.ac.th)
+  if (process.env.NODE_ENV === 'production') {
+    return '/api';
+  }
+  
+  // Development default
+  return 'http://localhost:4000';
+}
+
+const basePath = getBasePath();
+const apiBase = getApiBase();
+
 export default defineNuxtConfig({
   ssr: false, // Disable SSR to use only client-side rendering
 
   app: {
-    // ให้ทำงานได้ทั้ง local และใต้พาธ /ai_gateway/ บน dev2
-    baseURL: process.env.NUXT_APP_BASE_URL || (process.env.NODE_ENV === 'production' ? '/ai_gateway/' : '/'),
+    // ใช้ root path สำหรับ aigateway.ubu.ac.th
+    baseURL: basePath,
     head: (() => {
-      const base = process.env.NUXT_APP_BASE_URL || (process.env.NODE_ENV === 'production' ? '/ai_gateway/' : '/');
       return {
         link: [
           // Fonts for iOS: preconnect + stylesheet (more reliable than @import)
           { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
           { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
           { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap' },
-          { rel: 'icon', type: 'image/png', href: `${base}favicon.png` },
-          { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${base}favicon-16x16.png` },
-          { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base}favicon-32x32.png` },
-          { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}favicon.png` },
-          { rel: 'icon', type: 'image/x-icon', href: `${base}favicon.ico` },
+          { rel: 'icon', type: 'image/png', href: `${basePath}favicon.png` },
+          { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${basePath}favicon-16x16.png` },
+          { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${basePath}favicon-32x32.png` },
+          { rel: 'apple-touch-icon', sizes: '180x180', href: `${basePath}favicon.png` },
+          { rel: 'icon', type: 'image/x-icon', href: `${basePath}favicon.ico` },
           // Fallback to assets favicon if standard files missing
-          { rel: 'icon', type: 'image/png', href: `${base}assets/favicon.png` },
+          { rel: 'icon', type: 'image/png', href: `${basePath}assets/favicon.png` },
         ]
       }
     })(),
@@ -35,9 +69,10 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      // ค่าเริ่มต้น: prod ใต้ dev2 เรียกผ่าน nginx path, dev เรียก backend local
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || (process.env.NODE_ENV === 'production' ? '/ai_gateway_api' : 'http://localhost:4000'),
-      basePath: process.env.NUXT_APP_BASE_URL || (process.env.NODE_ENV === 'production' ? '/ai_gateway/' : '/'),
+      // API base: /api สำหรับ aigateway.ubu.ac.th
+      apiBase: apiBase,
+      // Base path: / สำหรับ aigateway.ubu.ac.th
+      basePath: basePath,
       appName: process.env.PUBLIC_APP_NAME || "UBU AI SERVICE"
     }
   },

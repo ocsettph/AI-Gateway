@@ -7,6 +7,43 @@
 				<p class="text-gray-600 dark:text-gray-300">ดูและจัดการ API Key ที่ได้รับการอนุมัติแล้ว</p>
             </div>
 
+			<!-- API Base URL Section -->
+			<div class="mb-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 md:p-6">
+				<div class="flex flex-col gap-4">
+					<!-- Header with title and models link -->
+					<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+						<h3 class="text-base font-semibold text-gray-900 dark:text-white">Base URL สำหรับ API</h3>
+						<NuxtLink 
+							to="/models" 
+							class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200 text-sm whitespace-nowrap shadow-sm hover:shadow-md"
+						>
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+							</svg>
+							ดูรายละเอียดโมเดล
+						</NuxtLink>
+					</div>
+					
+					<!-- URL input and copy button -->
+					<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+						<input 
+							:value="apiBaseUrl" 
+							readonly 
+							class="flex-1 px-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						/>
+						<button 
+							@click="copyBaseUrl"
+							class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+						>
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+							</svg>
+							คัดลอก Base URL
+						</button>
+					</div>
+				</div>
+			</div>
+
 			<!-- API Keys List -->
 			<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 md:p-8">
             <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
@@ -190,7 +227,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useHead, useRuntimeConfig } from 'nuxt/app';
 
 useHead({ 
@@ -205,25 +243,44 @@ const requests = ref<any[]>([]);
 const loading = ref(true);
 const editingNames = ref<Record<number, string>>({});
 
+// Compute API Base URL for display
+const apiBaseUrl = computed(() => {
+  const apiBase = useRuntimeConfig().public.apiBase as string
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  
+  // If apiBase is already absolute (starts with http), use it directly
+  if (/^https?:/i.test(apiBase)) {
+    // For dev: apiBase is like "http://localhost:4000"
+    // Backend v1 endpoints are at /api/v1
+    return `${apiBase}/api/v1`
+  }
+  
+  // For production: apiBase is "/api"
+  // Backend v1 endpoints are at /api/v1
+  const base = `${origin}${apiBase}`
+  return `${base}/v1`
+});
+
 const fetchData = async () => {
 	try {
     const apiBase = useRuntimeConfig().public.apiBase as string
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
 		
 		// Fetch approved API keys
-		const keysResponse = await $fetch(`${apiBase}/api/keys`, {
+		const keysResponse = await $fetch(buildApiPath('keys'), {
 			credentials: 'include'
 		}) as { keys: any[] }
 		keys.value = keysResponse.keys
 		// Load precise usage per key
 		await Promise.all(keys.value.map(async (k: any) => {
 			try {
-				const u: any = await $fetch(`${apiBase}/api/keys/usage`, { params: { value: k.key_value }, credentials: 'include' })
+				const u: any = await $fetch(buildApiPath('keys/usage'), { params: { value: k.key_value }, credentials: 'include' })
 				k._used = Number(u?.total?.cost_usd || 0)
 			} catch { k._used = Number(k.current_spend || 0) }
 		}))
 		
 		// Fetch pending requests
-		const requestsResponse = await $fetch(`${apiBase}/api/requests`, {
+		const requestsResponse = await $fetch(buildApiPath('requests'), {
 			credentials: 'include'
 		}) as { requests: any[] }
 		requests.value = requestsResponse.requests.filter(r => r.status === 'pending')
@@ -238,7 +295,8 @@ const fetchData = async () => {
 const toggleKey = async (key: any) => {
 	try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-		await $fetch(`${apiBase}/api/keys/${key.id}/toggle`, {
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+		await $fetch(buildApiPath(`keys/${key.id}/toggle`), {
 			method: 'PATCH',
 			credentials: 'include'
 		})
@@ -270,10 +328,27 @@ const copyKey = async (keyValue: string) => {
 	}
 }
 
+const copyBaseUrl = async () => {
+	try {
+		await navigator.clipboard.writeText(apiBaseUrl.value)
+		try {
+			const Swal = (await import('sweetalert2')).default
+			await Swal.fire({ icon: 'success', title: 'คัดลอกแล้ว', text: 'คัดลอก Base URL เรียบร้อยแล้ว' })
+		} catch {}
+	} catch (error) {
+		console.error('Error copying base URL:', error)
+		try {
+			const Swal = (await import('sweetalert2')).default
+			await Swal.fire({ icon: 'error', title: 'คัดลอกไม่สำเร็จ', text: 'ไม่สามารถคัดลอก Base URL ได้' })
+		} catch {}
+	}
+}
+
 const refreshUsage = async () => {
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    await $fetch(`${apiBase}/api/keys/refresh`, { method: 'POST', credentials: 'include' })
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    await $fetch(buildApiPath('keys/refresh'), { method: 'POST', credentials: 'include' })
     await fetchData()
   } catch (e) {
     // ignore
@@ -296,7 +371,8 @@ const confirmDeleteKey = async (key: any) => {
 
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    await $fetch(`${apiBase}/api/keys/${key.id}`, { method: 'DELETE', credentials: 'include' })
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    await $fetch(buildApiPath(`keys/${key.id}`), { method: 'DELETE', credentials: 'include' })
     await fetchData()
   } catch (e) {
 		try {
@@ -324,7 +400,8 @@ const saveKeyName = async (key: any) => {
 	
 	try {
 		const apiBase = useRuntimeConfig().public.apiBase as string;
-		const response = await $fetch(`${apiBase}/api/keys/${key.id}`, {
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+		const response = await $fetch(buildApiPath(`keys/${key.id}`), {
 			method: 'PATCH',
 			body: { name: newName },
 			credentials: 'include'
@@ -369,7 +446,8 @@ const confirmDeleteRequest = async (reqItem: any) => {
 
     try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-        await $fetch(`${apiBase}/api/requests/${reqItem.id}`, { method: 'DELETE', credentials: 'include' })
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+        await $fetch(buildApiPath(`requests/${reqItem.id}`), { method: 'DELETE', credentials: 'include' })
         // remove locally
         requests.value = requests.value.filter(r => r.id !== reqItem.id)
     } catch (e) {
@@ -413,13 +491,52 @@ function money(v: any) {
   return n.toFixed(2)
 }
 
-onMounted(() => {
+const route = useRoute()
+const router = useRouter()
+
+onMounted(async () => {
+	// Handle invite link from email
+	const inviteToken = route.query.invite as string | undefined
+	if (inviteToken) {
+		try {
+			// Track invite link click in n8n
+			const apiBase = useRuntimeConfig().public.apiBase as string
+			const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+			try {
+				await $fetch(buildApiPath('invite/track'), {
+					method: 'POST',
+					body: { inviteToken },
+					credentials: 'include'
+				})
+			} catch (trackError) {
+				console.warn('Failed to track invite link click:', trackError)
+				// Continue even if tracking fails
+			}
+
+			const Swal = (await import('sweetalert2')).default
+			await Swal.fire({ 
+				icon: 'success', 
+				title: '🎉 ยินดีต้อนรับ!', 
+				html: 'คำขอ API Key ของคุณได้รับการอนุมัติแล้ว<br/>คุณสามารถใช้งาน API Key ได้เลย',
+				confirmButtonText: 'รับทราบ',
+				timer: 5000
+			})
+			// Remove invite token from URL
+			const newQuery = { ...route.query }
+			delete newQuery.invite
+			router.replace({ query: newQuery })
+		} catch {
+			// ignore if SweetAlert not available
+		}
+	}
+	
 	fetchData()
   // Fetch and display notifications (e.g., rejected requests)
   ;(async () => {
     try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-      const res = await $fetch(`${apiBase}/api/notifications`, { credentials: 'include' }) as { notifications: any[] }
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+      const res = await $fetch(buildApiPath('notifications'), { credentials: 'include' }) as { notifications: any[] }
       const list = res.notifications || []
       if (list.length > 0) {
         try {
@@ -430,7 +547,7 @@ onMounted(() => {
         } catch {
           // ignore if SweetAlert not available
         }
-        await $fetch(`${apiBase}/api/notifications/read`, { method: 'PATCH', credentials: 'include' })
+        await $fetch(buildApiPath('notifications/read'), { method: 'PATCH', credentials: 'include' })
       }
     } catch (e) {
       // ignore

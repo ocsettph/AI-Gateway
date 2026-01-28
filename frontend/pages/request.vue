@@ -79,7 +79,7 @@
 
 					<!-- API Key Name Field -->
 					<div>
-						<label for="apiKeyName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ชื่อ API Key</label>
+						<label for="apiKeyName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ชื่อ API Key (ชื่อโปรเจกต์ที่จะใช้งาน API Key)</label>
 						<input 
 							v-model="form.apiKeyName"
 							type="text" 
@@ -103,14 +103,14 @@
 					</div>
 					
 					<div>
-						<label for="expectedUsage" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">การใช้งานที่คาดหวัง</label>
+						<label for="expectedUsage" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ประเภทการใช้งาน</label>
 						<select 
 							v-model="form.expectedUsage"
 							id="expectedUsage" 
 							required
 							class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
 						>
-							<option value="">เลือกการใช้งานที่คาดหวัง</option>
+							<option value="">เลือกประเภทการใช้งาน</option>
 							<option value="research">งานวิจัย</option>
 							<option value="education">การเรียนการสอน</option>
 							<option value="project">โปรเจค/วิทยานิพนธ์</option>
@@ -152,7 +152,7 @@
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
 							</svg>
 							<span class="text-sm font-medium text-green-800 dark:text-green-200">
-								ระบบจะกำหนดค่าเริ่มต้นเครดิตที่ 10 USD สำหรับ API Key นี้
+								ระบบจะกำหนดค่าเริ่มต้นเครดิตที่ 5 เครดิต สำหรับ API Key นี้
 							</span>
 						</div>
 					</div>
@@ -218,7 +218,8 @@ const router = useRouter();
 const fetchCurrentUser = async () => {
 	try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-		const me = await $fetch(`${apiBase}/api/me`, { credentials: 'include' }) as any
+    const apiPath = apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/me` : `${apiBase}/api/me`
+		const me = await $fetch(apiPath, { credentials: 'include' }) as any
 		
 		if (me?.user) {
 			// Auto-fill form with current user data
@@ -270,11 +271,12 @@ const submitRequest = async () => {
 	
 	try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-		const response = await $fetch(`${apiBase}/api/requests`, {
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+		const response = await $fetch(buildApiPath('requests'), {
 			method: 'POST',
 			body: {
 				...form.value,
-				creditLimit: 10 // Default 10 USD
+				creditLimit: 5 // Default 5 credits
 			},
 			credentials: 'include'
 		})

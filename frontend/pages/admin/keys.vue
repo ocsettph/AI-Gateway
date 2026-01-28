@@ -370,14 +370,15 @@ const departmentOptions = computed(() => {
 })
 
 const apiBase = useRuntimeConfig().public.apiBase as string
+const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
 
 const fetchKeys = async () => {
-  const data = await $fetch(`${apiBase}/api/admin/keys`, { params: { q: q.value, department: department.value }, credentials: 'include' }) as { keys: any[] }
+  const data = await $fetch(buildApiPath('admin/keys'), { params: { q: q.value, department: department.value }, credentials: 'include' }) as { keys: any[] }
   keys.value = (data.keys || []).map(k => ({ ...k, _credit: Number(k.credit_limit || 0) }))
   // load precise usage total for each key for high-precision display
   await Promise.all(keys.value.map(async (it: any) => {
     try {
-      const u: any = await $fetch(`${apiBase}/api/keys/usage`, { params: { value: it.key_value }, credentials: 'include' })
+      const u: any = await $fetch(buildApiPath('keys/usage'), { params: { value: it.key_value }, credentials: 'include' })
       it._used = Number(u?.total?.cost_usd || 0)
     } catch { it._used = Number(it.current_spend || 0) }
   }))
@@ -385,7 +386,7 @@ const fetchKeys = async () => {
 
 const save = async (k: any) => {
   try {
-    await $fetch(`${apiBase}/api/admin/keys/${k.id}`, { method: 'PATCH', body: { credit_limit: k._credit, is_active: k.is_active }, credentials: 'include' })
+    await $fetch(buildApiPath(`admin/keys/${k.id}`), { method: 'PATCH', body: { credit_limit: k._credit, is_active: k.is_active }, credentials: 'include' })
     await fetchKeys()
   } catch (e) {
 	try { const Swal = (await import('sweetalert2')).default; await Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ' }) } catch {}
@@ -408,7 +409,7 @@ const saveKeyName = async (k: any) => {
   }
   
   try {
-    await $fetch(`${apiBase}/api/admin/keys/${k.id}`, {
+    await $fetch(buildApiPath(`admin/keys/${k.id}`), {
       method: 'PATCH',
       body: { name: newName },
       credentials: 'include'
@@ -447,7 +448,7 @@ const adminDelete = async (k: any) => {
     if (!res.isConfirmed) return
   } catch {}
   try {
-    await $fetch(`${apiBase}/api/admin/keys/${k.id}`, { method: 'DELETE', credentials: 'include' })
+    await $fetch(buildApiPath(`admin/keys/${k.id}`), { method: 'DELETE', credentials: 'include' })
     await fetchKeys()
   } catch (e) {
     try { const Swal = (await import('sweetalert2')).default; await Swal.fire({ icon: 'error', title: 'ลบคีย์ไม่สำเร็จ' }) } catch {}
@@ -456,7 +457,7 @@ const adminDelete = async (k: any) => {
 
 const adminToggle = async (k: any) => {
   try {
-    await $fetch(`${apiBase}/api/admin/keys/${k.id}`, { method: 'PATCH', body: { is_active: !k.is_active }, credentials: 'include' })
+    await $fetch(buildApiPath(`admin/keys/${k.id}`), { method: 'PATCH', body: { is_active: !k.is_active }, credentials: 'include' })
     await fetchKeys()
   } catch (e) {
     // ignore
@@ -465,8 +466,7 @@ const adminToggle = async (k: any) => {
 
 async function loadSettings() {
   try {
-    const apiBase = useRuntimeConfig().public.apiBase as string
-    const res = await $fetch(`${apiBase}/api/admin/settings`, { credentials: 'include' }) as { settings: any }
+    const res = await $fetch(buildApiPath('admin/settings'), { credentials: 'include' }) as { settings: any }
     if (res.settings?.auto_disable_inactive_days?.value) {
       autoDisableDays.value = Number(res.settings.auto_disable_inactive_days.value)
     }
@@ -490,8 +490,7 @@ async function saveSettings() {
   
   savingSettings.value = true
   try {
-    const apiBase = useRuntimeConfig().public.apiBase as string
-    const res = await $fetch(`${apiBase}/api/admin/settings`, {
+    const res = await $fetch(buildApiPath('admin/settings'), {
       method: 'PATCH',
       credentials: 'include',
       body: { key: 'auto_disable_inactive_days', value: autoDisableDays.value }
@@ -554,8 +553,7 @@ async function runAutoDisable() {
     if (!result.isConfirmed) return
     
     runningAutoDisable.value = true
-    const apiBase = useRuntimeConfig().public.apiBase as string
-    const res = await $fetch(`${apiBase}/api/admin/auto-disable-inactive`, {
+    const res = await $fetch(buildApiPath('admin/auto-disable-inactive'), {
       method: 'POST',
       credentials: 'include'
     }) as { success: boolean, disabled_count: number, days: number, message: string }

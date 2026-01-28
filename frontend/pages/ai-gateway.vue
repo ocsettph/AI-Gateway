@@ -61,10 +61,17 @@ const mobileCards = computed<NavCard[]>(() => {
 onMounted(async () => {
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    const me = await $fetch(`${apiBase}/api/me`, { credentials: 'include' }) as any
+    // apiBase already includes /api prefix for production
+    const mePath = apiBase.endsWith('/api') || apiBase === '/api' 
+      ? `${apiBase}/me` 
+      : `${apiBase}/api/me`
+    const me = await $fetch(mePath, { credentials: 'include' }) as any
     isAdmin.value = me?.user?.role === 'ADMIN'
     if (isAdmin.value) {
-      const r = await $fetch(`${apiBase}/api/admin/requests`, { credentials: 'include' }) as any
+      const adminPath = apiBase.endsWith('/api') || apiBase === '/api' 
+        ? `${apiBase}/admin/requests` 
+        : `${apiBase}/api/admin/requests`
+      const r = await $fetch(adminPath, { credentials: 'include' }) as any
       const list = r?.requests || []
       pendingCount.value = list.filter((x: any) => x.status === 'pending').length
     }
@@ -148,9 +155,9 @@ onMounted(async () => {
         <div class="mt-6 flex items-center justify-center gap-4 md:gap-5 select-none">
           <img :src="base + 'assets/Ubu_logo.png'" alt="UBU" title="UBU" class="h-10 w-10 md:h-12 md:w-12 object-contain max-w-[2.5rem] md:max-w-[3rem]" />
           <img :src="base + 'assets/ubufavicon.png'" alt="UBU Favicon" title="UBU Favicon" class="h-10 w-10 md:h-12 md:w-12 object-contain max-w-[2.5rem] md:max-w-[3rem]" />
-          <img :src="base + 'assets/api.png'" alt="API" title="API" class="h-10 w-10 md:h-12 md:w-12 object-contain max-w-[2.5rem] md:max-w-[3rem]" />
+          <img :src="base + 'assets/api_new.png'" alt="API" title="API" class="h-10 w-10 md:h-12 md:w-12 object-contain max-w-[2.5rem] md:max-w-[3rem]" />
           <img :src="base + 'assets/N8n-logo-new.svg'" alt="n8n" title="n8n" class="h-12 w-12 md:h-14 md:w-14 object-contain max-w-[3.5rem] md:max-w-[4rem]" />
-          <img :src="base + 'assets/dify-logo.png'" alt="Dify" title="Dify" class="h-10 w-10 md:h-12 md:w-12 object-contain max-w-[2.5rem] md:max-w-[3rem]" />
+          <!-- <img :src="base + 'assets/dify-logo.png'" alt="Dify" title="Dify" class="h-10 w-10 md:h-12 md:w-12 object-contain max-w-[2.5rem] md:max-w-[3rem]" /> -->
         </div>
       </header>
 

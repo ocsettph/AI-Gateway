@@ -3,7 +3,8 @@ import { defineNuxtRouteMiddleware, navigateTo, useRuntimeConfig } from 'nuxt/ap
 export default defineNuxtRouteMiddleware(async (to, from) => {
   try {
     const apiBase = (useRuntimeConfig().public.apiBase as string)
-    const me = await $fetch(`${apiBase}/api/me`, { credentials: 'include' }) as any
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    const me = await $fetch(buildApiPath('me'), { credentials: 'include' }) as any
     
     if (!me?.user) {
       return navigateTo('/login')

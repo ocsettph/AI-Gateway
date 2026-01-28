@@ -92,11 +92,32 @@
 
       <!-- Models quick test card -->
       <div class="mt-6 md:mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 md:p-6">
-        <h2 class="text-lg md:text-xl font-semibold text-gray-900 dark:text-white mb-4">ทดสอบ Model</h2>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">ทดสอบ Model</h2>
+          <div class="flex items-center gap-3">
+            <span v-if="modelsLastUpdated" class="text-xs text-gray-500 dark:text-gray-400">
+              อัพเดท: {{ modelsLastUpdated }}
+            </span>
+            <span class="text-xs text-gray-500 dark:text-gray-400">
+              ({{ availableModels.length }} โมเดล)
+            </span>
+            <button 
+              @click="loadAvailableModels" 
+              :disabled="isLoadingModels"
+              class="px-3 py-1 text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ isLoadingModels ? 'กำลังโหลด...' : 'รีเฟรช' }}
+            </button>
+          </div>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
           <div>
             <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Model</label>
-            <input v-model="testModel" placeholder="openai/gpt-4o" class="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:text-white text-sm" />
+            <select v-model="testModel" class="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:text-white text-sm">
+              <option value="">-- เลือกโมเดล --</option>
+              <option v-for="m in availableModels" :key="m.id" :value="m.id">{{ m.id }}</option>
+            </select>
+            <input v-if="testModel && !availableModels.find(m => m.id === testModel)" v-model="testModel" placeholder="หรือพิมพ์ชื่อโมเดลเอง..." class="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:text-white text-xs mt-1" />
           </div>
           <div>
             <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">API Key ของคุณ</label>
@@ -124,13 +145,16 @@
   </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useHead } from 'nuxt/app'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useHead, useRuntimeConfig } from 'nuxt/app'
 
 useHead({ title: 'API Playground - UBU AI SERVICE' })
 
 const method = ref<'GET' | 'POST'>('GET')
-const url = ref((useRuntimeConfig().public.apiBase as string) + '/health')
+// Health endpoint is at /health (not /api/health)
+const apiBase = useRuntimeConfig().public.apiBase as string
+const healthUrl = apiBase.endsWith('/api') || apiBase === '/api' ? '/health' : `${apiBase}/health`
+const url = ref(healthUrl)
 const bearer = ref('')
 const withCredentials = ref(true)
 const body = ref('')
@@ -180,7 +204,8 @@ onMounted(() => {
   ;(async () => {
     try {
       const apiBase = useRuntimeConfig().public.apiBase as string
-      const res = await $fetch(`${apiBase}/api/keys`, { credentials: 'include' }) as any
+      const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+      const res = await $fetch(buildApiPath('keys'), { credentials: 'include' }) as any
       keys.value = res?.keys || []
       if (!selectedKeyId.value && keys.value.length) {
         const active = keys.value.find((k: any) => k.is_active)
@@ -188,6 +213,15 @@ onMounted(() => {
       }
     } catch {}
   })()
+  // load available models for dropdown (includes text-embedding models)
+  loadAvailableModels()
+  // start auto-refresh every 5 minutes
+  startAutoRefresh()
+})
+
+// Cleanup on unmount
+onBeforeUnmount(() => {
+  stopAutoRefresh()
 })
 
 // --- Models quick test ---
@@ -195,6 +229,75 @@ const testModel = ref('openai/gpt-4o')
 const testPrompt = ref('สวัสดีครับ')
 const modelResponse = ref('')
 const modelStatus = ref('')
+const availableModels = ref<any[]>([])
+const isLoadingModels = ref(false)
+const modelsLastUpdated = ref<string>('')
+let modelsRefreshInterval: ReturnType<typeof setInterval> | null = null
+
+// Format time for display
+const formatTime = (date: Date) => {
+  return date.toLocaleTimeString('th-TH', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+// Load available models for dropdown (includes text-embedding models)
+const loadAvailableModels = async () => {
+  if (isLoadingModels.value) return
+  isLoadingModels.value = true
+  try {
+    const apiBase = useRuntimeConfig().public.apiBase as string
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    const res = await $fetch(buildApiPath('models'), { credentials: 'include' }) as { models: any[] }
+    
+    // Store previous count to detect new models
+    const previousCount = availableModels.value.length
+    availableModels.value = res?.models || []
+    modelsLastUpdated.value = formatTime(new Date())
+    
+    // Log if new models were added
+    if (availableModels.value.length > previousCount) {
+      console.log(`✅ New models detected! Total: ${availableModels.value.length} (was ${previousCount})`)
+    }
+    
+    // Set default model if available and not already set
+    if (availableModels.value.length && !testModel.value) {
+      const defaultModel = availableModels.value.find(m => m.id.includes('gpt-4o')) || availableModels.value[0]
+      if (defaultModel) testModel.value = defaultModel.id
+    }
+    
+    // Also check if current selected model still exists, if not, reset to default
+    if (testModel.value && !availableModels.value.find(m => m.id === testModel.value)) {
+      const defaultModel = availableModels.value.find(m => m.id.includes('gpt-4o')) || availableModels.value[0]
+      if (defaultModel) testModel.value = defaultModel.id
+    }
+  } catch (e) {
+    console.warn('Failed to load models:', e)
+  } finally {
+    isLoadingModels.value = false
+  }
+}
+
+// Auto-refresh models every 5 minutes (300000 ms)
+const startAutoRefresh = () => {
+  if (modelsRefreshInterval) {
+    clearInterval(modelsRefreshInterval)
+  }
+  modelsRefreshInterval = setInterval(() => {
+    console.log('🔄 Auto-refreshing models list...')
+    loadAvailableModels()
+  }, 5 * 60 * 1000) // 5 minutes
+}
+
+// Stop auto-refresh
+const stopAutoRefresh = () => {
+  if (modelsRefreshInterval) {
+    clearInterval(modelsRefreshInterval)
+    modelsRefreshInterval = null
+  }
+}
 
 const runModelTest = async () => {
   if (!selectedKeyId.value) {
@@ -205,7 +308,8 @@ const runModelTest = async () => {
   modelStatus.value = 'กำลังส่ง...'
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    const res = await fetch(`${apiBase}/api/test-model`, {
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    const res = await fetch(buildApiPath('test-model'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',

@@ -1,0 +1,195 @@
+{
+  "name": "Invite Users to n8n",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "invite-users",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "dad355da-e694-4a25-a7c8-4e79881ac671",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2752,
+        560
+      ],
+      "webhookId": "invite-users"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://aigateway.ubu.ac.th/api/n8n/create-invite",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "=f4a8fe0523c44735386022529bef3ed3c5cee92f7c932888122693e2b2e27a46"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $json.body.user.email || $json.user.email }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "33095297-851f-462b-a279-745f0af8cf30",
+      "name": "Create n8n Invite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2560,
+        560
+      ],
+      "settings": {}
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "5ad95092-424a-4797-a682-dbdd2bc6c95e",
+      "name": "Set Invite Link",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -2352,
+        560
+      ],
+      "settings": {}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://aigateway.ubu.ac.th/api/n8n/send-email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "=f4a8fe0523c44735386022529bef3ed3c5cee92f7c932888122693e2b2e27a46"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "to",
+              "value": "={{ $('Create n8n Invite').item.json.invitation?.user?.email || $('Create n8n Invite').item.json.user?.email || $json.invitation?.user?.email || $json.body?.user?.email || $json.user?.email }}"
+            },
+            {
+              "name": "subject",
+              "value": "=เชิญใช้งาน n8n Workflow Automation - {{ $json.body.user.firstName || $json.body.user.first_name || $json.user.firstName || 'ผู้ใช้' }}"
+            },
+            {
+              "name": "html",
+              "value": "=<!DOCTYPE html>\n<html lang=\"th\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>UBU AI Automation Invitation</title>\n\n  <!-- Google Font: Kanit -->\n  <link href=\"https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">\n</head>\n\n<body style=\"\n  margin:0;\n  padding:0;\n  background-color:#ffffff;\n  font-family:'Kanit', -apple-system, BlinkMacSystemFont, 'Segoe UI',\n               Tahoma, 'Noto Sans Thai', Arial, sans-serif;\n\">\n\n  <div style=\"max-width:600px; margin:0 auto; padding:24px;\">\n\n    <!-- Logo -->\n    <div style=\"text-align:center; margin:32px 0;\">\n      <img src=\"https://drive.google.com/uc?export=view&id=12XbQzF8M9amxsDvfKUiVRzvse-6BkY1l\"\n           alt=\"UBU AI Logo\"\n           style=\"max-width:200px;\">\n    </div>\n\n    <!-- Card -->\n    <div style=\"background-color:#F9FAFB; border-radius:16px; padding:32px;\">\n\n      <p style=\"font-size:18px; font-weight:600; margin:0 0 16px;\">\n        สวัสดี\n      </p>\n\n      <p style=\"font-size:15px; line-height:26px; margin:0 0 16px;\">\n        คุณได้รับเชิญให้เข้าใช้งาน\n        <strong>n8n Workflow Automation</strong><br>\n        ภายใต้ระบบ <strong>UBU AI Automation</strong><br>\n        ของมหาวิทยาลัยอุบลราชธานี\n      </p>\n\n      <p style=\"font-size:14px; line-height:26px; margin:0 0 20px;\">\n        n8n เป็นแพลตฟอร์มสำหรับสร้างระบบอัตโนมัติ (Workflow Automation)\n        ช่วยเชื่อมต่อการทำงานระหว่างระบบต่าง ๆ เช่น\n        API Gateway, Database และ Email\n      </p>\n\n      <!-- Button -->\n      <div style=\"text-align:center; margin:28px 0;\">\n        <a href=\"{{ $json.inviteLink || 'https://n8n.ubu.ac.th' }}\"\n           target=\"_blank\"\n           style=\"\n             display:inline-block;\n             padding:14px 32px;\n             background-color:#E94E77;\n             color:#ffffff;\n             text-decoration:none;\n             border-radius:999px;\n             font-size:15px;\n             font-weight:600;\n           \">\n          เข้าร่วมใช้งาน UBU AI Automation\n        </a>\n      </div>\n\n      <!-- Info -->\n      <p style=\"font-size:14px; margin:0 0 6px;\">\n        <strong>อีเมล:</strong> ubuaiapi@ubu.ac.th\n      </p>\n      <p style=\"font-size:14px; margin:0 0 20px;\">\n        <strong>URL:</strong> https://n8n.ubu.ac.th\n      </p>\n\n      <p style=\"font-size:14px; line-height:24px; margin:0 0 20px;\">\n        เมื่อคลิกลิงก์ ระบบจะให้คุณตั้งรหัสผ่านและสร้างบัญชีผู้ใช้ด้วยตนเอง\n      </p>\n\n      <p style=\"font-size:14px; margin:0;\">\n        ขอบคุณครับ<br>\n        <strong>UBU AI Team</strong>\n      </p>\n\n    </div>\n\n    <!-- Footer -->\n    <div style=\"text-align:center; margin-top:24px; font-size:12px; color:#98A2B3;\">\n      © 2026 UBU AI Automation. All rights reserved.\n    </div>\n\n  </div>\n</body>\n</html>"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "95eff968-d8e2-40c7-8b83-d747e643638e",
+      "name": "Send Invite Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2160,
+        560
+      ],
+      "settings": {}
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Invite email sent successfully\", \"inviteLink\": $('Create n8n Invite').item.json.inviteLink } }}",
+        "options": {}
+      },
+      "id": "6b9b9e5f-b85c-4513-a0cd-fa9734447952",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -1920,
+        560
+      ],
+      "settings": {}
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Create n8n Invite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create n8n Invite": {
+      "main": [
+        [
+          {
+            "node": "Set Invite Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Invite Link": {
+      "main": [
+        [
+          {
+            "node": "Send Invite Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Invite Email": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "e15fee87-95f8-426a-8128-8ed60637888b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4dc127666738e721ea4c8cf5c71581e3a800b764f580b3b247fa47a8a4f6eba5"
+  },
+  "id": "JI3jCK2ZqtQhSCOZ",
+  "tags": []
+}

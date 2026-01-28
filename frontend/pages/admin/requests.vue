@@ -94,7 +94,8 @@ const apiBase = useRuntimeConfig().public.apiBase as string
 const fetchRequests = async () => {
   loading.value = true
   try {
-    const res = await $fetch(`${apiBase}/api/admin/requests`, { credentials: 'include' }) as { requests: any[] }
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    const res = await $fetch(buildApiPath('admin/requests'), { credentials: 'include' }) as { requests: any[] }
     requests.value = (res.requests || []).filter(r => r.status === 'pending')
     
     // Check if there's an approve parameter in URL (from Google Chat button)
@@ -144,7 +145,8 @@ const filteredRequests = computed(() => {
 const approve = async (reqItem: any) => {
   try {
     processingId.value = reqItem.id
-    await $fetch(`${apiBase}/api/admin/requests/${reqItem.id}/approve`, { method: 'POST', credentials: 'include' })
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    await $fetch(buildApiPath(`admin/requests/${reqItem.id}/approve`), { method: 'POST', credentials: 'include' })
     requests.value = requests.value.filter(r => r.id !== reqItem.id)
     try { const Swal = (await import('sweetalert2')).default; await Swal.fire({ icon: 'success', title: 'อนุมัติแล้ว' }) } catch {}
   } catch (e) {
@@ -158,7 +160,8 @@ const approve = async (reqItem: any) => {
 const reject = async (reqItem: any) => {
   try {
     processingId.value = reqItem.id
-    await $fetch(`${apiBase}/api/admin/requests/${reqItem.id}/reject`, { method: 'POST', credentials: 'include' })
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    await $fetch(buildApiPath(`admin/requests/${reqItem.id}/reject`), { method: 'POST', credentials: 'include' })
     requests.value = requests.value.filter(r => r.id !== reqItem.id)
     try { const Swal = (await import('sweetalert2')).default; await Swal.fire({ icon: 'success', title: 'ปฏิเสธแล้ว' }) } catch {}
   } catch (e) {

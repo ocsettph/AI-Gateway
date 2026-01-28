@@ -35,7 +35,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   try {
     const apiBase = (useRuntimeConfig().public.apiBase as string)
-    const me: any = await $fetch(`${apiBase}/api/me`, { credentials: 'include' })
+    // apiBase already includes /api prefix for production
+    const mePath = apiBase.endsWith('/api') || apiBase === '/api' 
+      ? `${apiBase}/me` 
+      : `${apiBase}/api/me`
+    const me: any = await $fetch(mePath, { credentials: 'include' })
     if (!me || !me.user) {
       // อยู่ที่หน้า root ให้เข้าได้, ที่อื่นให้ไปหน้า login ภายใต้ base
       if (path !== '/') return navigateTo(loginPath)

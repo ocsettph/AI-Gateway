@@ -671,7 +671,8 @@ const fetchUsers = async () => {
   loading.value = true
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    const response = await $fetch(`${apiBase}/api/admin/users`, {
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    const response = await $fetch(buildApiPath('admin/users'), {
       credentials: 'include'
     }) as { users: User[] }
     users.value = response.users
@@ -747,7 +748,8 @@ const selectHrPerson = (person: any) => {
 const addUser = async () => {
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-		const response = await $fetch(`${apiBase}/api/admin/users`, {
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+		const response = await $fetch(buildApiPath('admin/users'), {
 			method: 'POST',
 			body: newUser.value,
 			credentials: 'include'
@@ -781,7 +783,8 @@ const editUser = (user: User) => {
 const saveUser = async () => {
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    await $fetch(`${apiBase}/api/admin/users/${editingUser.value.id}`, {
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    await $fetch(buildApiPath(`admin/users/${editingUser.value.id}`), {
       method: 'PATCH',
       body: {
         role: editingUser.value.role,
@@ -818,7 +821,8 @@ const deleteUser = async (user: User) => {
 
   try {
     const apiBase = useRuntimeConfig().public.apiBase as string
-    await $fetch(`${apiBase}/api/admin/users/${user.id}`, {
+    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+    await $fetch(buildApiPath(`admin/users/${user.id}`), {
       method: 'DELETE',
       credentials: 'include'
     })
