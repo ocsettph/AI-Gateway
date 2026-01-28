@@ -6,6 +6,7 @@ useHead({
 })
 
 const base = (useRuntimeConfig().public as any).basePath || '/'
+const appVersion = (useRuntimeConfig().public as any).appVersion || '5.1.0'
 
 type ServiceOption = {
   title: string;
@@ -84,6 +85,13 @@ const services: ServiceOption[] = [
           <img :src="base + 'assets/api_new.png'" alt="API" title="API" class="h-10 w-10 md:h-12 md:w-12 object-contain max-w-[2.5rem] md:max-w-[3rem]" />
           <img :src="base + 'assets/N8n-logo-new.svg'" alt="n8n" title="n8n" class="h-12 w-12 md:h-14 md:w-14 object-contain max-w-[3.5rem] md:max-w-[4rem]" />
           <!-- <img :src="base + 'assets/dify-logo.png'" alt="Dify" title="Dify" class="h-10 w-10 md:h-12 md:w-12 object-contain max-w-[2.5rem] md:max-w-[3rem]" /> -->
+        </div>
+
+        <!-- Version Display -->
+        <div class="mt-4 text-center">
+          <span class="text-xs text-gray-400 dark:text-gray-500 font-mono">
+            ubu.ai.service V.{{ appVersion }}
+          </span>
         </div>
       </header>
 

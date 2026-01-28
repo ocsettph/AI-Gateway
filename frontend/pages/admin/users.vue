@@ -18,6 +18,14 @@
               </svg>
               <span>เพิ่มผู้ใช้</span>
             </button>
+            <button
+              @click="syncHrUnspecified"
+              class="px-3 py-1 bg-amber-500 text-white rounded-full hover:bg-amber-600 transition-colors flex items-center justify-center space-x-1 text-xs sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              :disabled="syncHrLoading"
+            >
+              <span v-if="!syncHrLoading">Sync HR</span>
+              <span v-else>Syncing...</span>
+            </button>
             <NuxtLink 
               to="/" 
               class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center space-x-2 text-sm sm:text-base"
@@ -136,13 +144,22 @@
           </div>
           
           <!-- Clear Filters Button -->
-          <div class="mt-4 flex justify-center sm:justify-end">
+          <div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <button
               @click="clearFilters"
               class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors w-full sm:w-auto"
             >
               ล้างตัวกรอง
             </button>
+            <div v-if="syncHrResult" class="text-xs sm:text-sm text-gray-700 dark:text-gray-200">
+              <div>ผลการ Sync จาก HR:</div>
+              <div class="mt-1">
+                อัปเดตแล้ว {{ syncHrResult.updated }} รายการ,
+                ยัง “ไม่ระบุ” {{ syncHrResult.still_unspecified }} รายการ,
+                หาไม่เจอใน HR {{ syncHrResult.hr_not_found }} รายการ,
+                error {{ syncHrResult.errors }} รายการ
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -499,6 +516,22 @@
               >
             </div>
             <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">คณะ</label>
+              <input
+                v-model="editingUser.faculty"
+                type="text"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+              >
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">หน่วยงาน / ภาควิชา</label>
+              <input
+                v-model="editingUser.department_name"
+                type="text"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+              >
+            </div>
+            <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Role</label>
               <select
                 v-model="editingUser.role"
@@ -588,6 +621,10 @@ const newUser = ref<Partial<User>>({
 const searchQuery = ref('')
 const roleFilter = ref('')
 const statusFilter = ref('')
+
+// HR sync for "ไม่ระบุ" users
+const syncHrLoading = ref(false)
+const syncHrResult = ref<any | null>(null)
 
 // Pagination
 const currentPage = ref(1)
@@ -680,6 +717,35 @@ const fetchUsers = async () => {
     console.error('Error fetching users:', error)
   } finally {
     loading.value = false
+  }
+}
+
+// Sync users whose faculty/department is missing or "ไม่ระบุ" from HR
+const syncHrUnspecified = async () => {
+  if (syncHrLoading.value) return
+  syncHrLoading.value = true
+  syncHrResult.value = null
+  try {
+    const apiBase = useRuntimeConfig().public.apiBase as string
+    const buildApiPath = (endpoint: string) =>
+      apiBase.endsWith('/api') || apiBase === '/api'
+        ? `${apiBase}/${endpoint}`
+        : `${apiBase}/api/${endpoint}`
+
+    const res = await $fetch(buildApiPath('admin/users/sync-hr-unspecified'), {
+      method: 'POST',
+      credentials: 'include',
+      body: { limit: 300 }
+    }) as any
+
+    syncHrResult.value = res
+    // Reload users so the table reflects updated faculty/department
+    await fetchUsers()
+  } catch (error) {
+    console.error('Error syncing HR unspecified users:', error)
+    syncHrResult.value = { success: false, error: 'Sync failed' }
+  } finally {
+    syncHrLoading.value = false
   }
 }
 
@@ -788,7 +854,9 @@ const saveUser = async () => {
       method: 'PATCH',
       body: {
         role: editingUser.value.role,
-        status: editingUser.value.status
+        status: editingUser.value.status,
+        faculty: editingUser.value.faculty,
+        department_name: editingUser.value.department_name
       },
       credentials: 'include'
     })

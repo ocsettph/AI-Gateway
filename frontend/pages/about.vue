@@ -13,9 +13,9 @@
         <div class="text-center">
           <div class="w-36 h-36 flex items-center justify-center mx-auto mb-4">
             <img
-              src="/assets/UBU_AI_FLOW_icon.png"
+              src="/assets/main_logo_cl_en.png"
               alt="UBU AI SERVICE"
-              class="h-32 w-32 object-contain flex-shrink-0"
+              class="h-50 w-50 object-contain flex-shrink-0"
             />
           </div>
           <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">

@@ -97,6 +97,8 @@ declare module 'nuxt/schema' {
    basePath: string,
 
    appName: string,
+
+   appVersion: string,
   }
 }
 declare module 'vue' {

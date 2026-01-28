@@ -861,49 +861,112 @@ async function getAuthUser(req) {
 }
 
 // ✅ HR API Cache
+// ตอนนี้รองรับทั้ง API บุคลากรเดิม และ API นักศึกษาที่ดึงจาก UBU account
+// แล้ว merge ข้อมูลเข้าด้วยกันก่อน cache
 let hrApiCache = {
-    data: null,
-    lastFetch: 0,
-    cacheDuration: 5 * 60 * 1000 // 5 minutes
+  data: null,
+  lastFetch: 0,
+  cacheDuration: 5 * 60 * 1000 // 5 minutes
 };
 
 const getHrData = async () => {
-    const now = Date.now();
+  const now = Date.now();
 
-    // ถ้า cache ยังไม่หมดอายุ ให้ใช้ข้อมูลจาก cache
-    if (hrApiCache.data && (now - hrApiCache.lastFetch) < hrApiCache.cacheDuration) {
-        console.log('📦 Using cached HR data');
+  // ถ้า cache ยังไม่หมดอายุ ให้ใช้ข้อมูลจาก cache
+  if (hrApiCache.data && (now - hrApiCache.lastFetch) < hrApiCache.cacheDuration) {
+    console.log('📦 Using cached HR data');
+    return hrApiCache.data;
+  }
+
+  // URL หลัก (บุคลากร / เจ้าหน้าที่)
+  const hrStaffUrl =
+    process.env.HR_API_URL ||
+    'https://dev.ubu.ac.th/api_hr/get_person_name';
+
+  // URL สำหรับนักศึกษา (ดึงจาก UBU account โดยตรง)
+  const hrStudentUrl =
+    process.env.HR_STUDENT_API_URL ||
+    'https://dev.ubu.ac.th/api_hr/get_person_name_ubuaccount';
+
+  try {
+    console.log('🔄 Fetching fresh HR data from APIs:', {
+      staffUrl: hrStaffUrl,
+      studentUrl: hrStudentUrl
+    });
+
+    const [staffResp, studentResp] = await Promise.allSettled([
+      axios.get(hrStaffUrl),
+      axios.get(hrStudentUrl)
+    ]);
+
+    let combined = [];
+
+    if (staffResp.status === 'fulfilled' && Array.isArray(staffResp.value.data)) {
+      console.log(`✅ HR staff data fetched: ${staffResp.value.data.length} records`);
+      combined = combined.concat(staffResp.value.data);
+    } else if (staffResp.status === 'rejected') {
+      console.error('❌ Error fetching HR staff data:', staffResp.reason?.message || staffResp.reason);
+    }
+
+    if (studentResp.status === 'fulfilled' && Array.isArray(studentResp.value.data)) {
+      console.log(`✅ HR student data fetched: ${studentResp.value.data.length} records`);
+      combined = combined.concat(studentResp.value.data);
+    } else if (studentResp.status === 'rejected') {
+      console.error('❌ Error fetching HR student data:', studentResp.reason?.message || studentResp.reason);
+    }
+
+    if (!combined.length) {
+      console.error('❌ No HR data fetched from either staff or student API');
+      // ถ้า cache เก่ามีอยู่ ให้ใช้ cache เก่า
+      if (hrApiCache.data) {
+        console.log('⚠️ Using stale HR cache due to API error');
         return hrApiCache.data;
+      }
+      throw new Error('HR APIs returned no data');
     }
 
-    try {
-        // Support both dev and production HR API URLs
-        const hrApiUrl = process.env.HR_API_URL || 'https://dev.ubu.ac.th/api_hr/get_person_name';
-        console.log('🔄 Fetching fresh HR data from API:', hrApiUrl);
-        const response = await axios.get(hrApiUrl);
-        hrApiCache.data = response.data;
-        hrApiCache.lastFetch = now;
-        console.log(`✅ HR data cached: ${response.data.length} records`);
-        
-        // Log sample record structure for debugging
-        if (response.data && response.data.length > 0) {
-            console.log('📋 Sample HR record fields:', Object.keys(response.data[0]));
-            console.log('📋 Sample HR record (first 3 keys):', 
-                Object.fromEntries(Object.entries(response.data[0]).slice(0, 3))
-            );
-        }
-        
-        return response.data;
-    } catch (error) {
-        console.error('❌ Error fetching HR data:', error.message);
-        console.error('   URL attempted:', process.env.HR_API_URL || 'https://dev.ubu.ac.th/api_hr/get_person_name');
-        // ถ้า cache เก่ามีอยู่ ให้ใช้ cache เก่า
-        if (hrApiCache.data) {
-            console.log('⚠️ Using stale HR cache due to API error');
-            return hrApiCache.data;
-        }
-        throw error;
+    // รวมข้อมูล โดยให้ key หลักคือ ubuaccount หรือ email เพื่อลด duplicate
+    const seen = new Map();
+    for (const row of combined) {
+      const key =
+        (row.ubuaccount || row.account || row.username || row.email || '').toLowerCase();
+      if (!key) continue;
+      if (!seen.has(key)) {
+        seen.set(key, row);
+      } else {
+        // ถ้ามีทั้ง staff และ student สำหรับคนเดียวกัน ให้ merge field แบบง่ายๆ
+        const existing = seen.get(key);
+        seen.set(key, { ...existing, ...row });
+      }
     }
+
+    const mergedData = Array.from(seen.values());
+
+    hrApiCache.data = mergedData;
+    hrApiCache.lastFetch = now;
+    console.log(`✅ HR data cached (staff + students): ${mergedData.length} unique records`);
+
+    // Log sample record structure for debugging
+    if (mergedData.length > 0) {
+      console.log('📋 Sample HR record fields:', Object.keys(mergedData[0]));
+      console.log(
+        '📋 Sample HR record (first 3 keys):',
+        Object.fromEntries(Object.entries(mergedData[0]).slice(0, 3))
+      );
+    }
+
+    return mergedData;
+  } catch (error) {
+    console.error('❌ Error fetching HR data:', error.message || error);
+    console.error('   Staff URL attempted:', hrStaffUrl);
+    console.error('   Student URL attempted:', hrStudentUrl);
+    // ถ้า cache เก่ามีอยู่ ให้ใช้ cache เก่า
+    if (hrApiCache.data) {
+      console.log('⚠️ Using stale HR cache due to API error');
+      return hrApiCache.data;
+    }
+    throw error;
+  }
 };
 
 // HR Data fetch function (using real HR API with cache)
@@ -919,18 +982,69 @@ async function fetchHrData(username) {
       return null;
     }
     
-    // Find user in HR data - search by ubuaccount or email
+    // Find user in HR data - search by ubuaccount, personcode (รหัสนักศึกษา/บุคลากร) หรือ email
     const userData = hrDataList.find(user => {
       const userAccount = user.ubuaccount || user.account || user.username || '';
+      const userPersoncode = user.personcode || user.person_code || user.personCode || '';
       const userEmail = user.email || '';
       const normalizedUsername = username.toLowerCase();
       return userAccount.toLowerCase() === normalizedUsername || 
+             userPersoncode.toLowerCase() === normalizedUsername ||
              userEmail.toLowerCase() === normalizedUsername ||
              userEmail.toLowerCase() === `${normalizedUsername}@ubu.ac.th`;
     });
     
-    if (!userData) {
-      console.log(`❌ User ${username} not found in HR system (searched ${hrDataList.length} records)`);
+    let finalUserData = userData;
+    
+    if (!finalUserData) {
+      console.log(`❌ User ${username} not found in cached HR list (searched ${hrDataList.length} records), trying student API by keyword...`);
+      
+      // Fallback: call HR_STUDENT_API_URL แบบระบุ keyword (เช่น /get_person_name_ubuaccount?keyword=66114540193)
+      try {
+        let hrStudentBaseUrl =
+          process.env.HR_STUDENT_API_URL ||
+          'https://dev.ubu.ac.th/api_hr/get_person_name_ubuaccount';
+
+        // รองรับทั้งสองรูปแบบ config:
+        // 1) .../get_person_name_ubuaccount
+        // 2) .../get_person_name_ubuaccount?keyword=
+        let studentUrl;
+        if (hrStudentBaseUrl.includes('keyword=')) {
+          // ถ้ามี keyword= อยู่แล้ว ให้ต่อ username ไปตรง ๆ
+          studentUrl = `${hrStudentBaseUrl}${encodeURIComponent(username)}`;
+        } else {
+          const separator = hrStudentBaseUrl.includes('?') ? '&' : '?';
+          studentUrl = `${hrStudentBaseUrl}${separator}keyword=${encodeURIComponent(username)}`;
+        }
+        
+        console.log('🔄 [HR fallback] Fetching student info by keyword from:', studentUrl);
+        const resp = await axios.get(studentUrl);
+        const raw = resp.data;
+        
+        const list = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.data)
+            ? raw.data
+            : [];
+        
+        if (list.length > 0) {
+          finalUserData = list[0];
+          console.log(`✅ [HR fallback] Found student record for ${username} via keyword API`, {
+            faculty_name: finalUserData.faculty_name,
+            department_name: finalUserData.department_name,
+            ubuaccount: finalUserData.ubuaccount,
+            personcode: finalUserData.personcode
+          });
+        } else {
+          console.log(`❌ [HR fallback] Student API returned no data for keyword=${username}`);
+        }
+      } catch (fallbackErr) {
+        console.error(`❌ [HR fallback] Error calling student keyword API for ${username}:`, fallbackErr?.message || fallbackErr);
+      }
+    }
+    
+    if (!finalUserData) {
+      console.log(`❌ User ${username} not found in HR system (including student keyword API)`);
       // Log sample record to see structure
       if (hrDataList.length > 0) {
         console.log('📋 Sample HR record structure:', Object.keys(hrDataList[0]));
@@ -939,25 +1053,25 @@ async function fetchHrData(username) {
     }
     
     console.log(`✅ Found HR data for ${username}:`, {
-      faculty: userData.faculty || userData.faculty_name,
-      department: userData.department_name || userData.department,
-      allFields: Object.keys(userData),
-      rawData: userData // Log full record for debugging
+      faculty: finalUserData.faculty || finalUserData.faculty_name,
+      department: finalUserData.department_name || finalUserData.department,
+      allFields: Object.keys(finalUserData),
+      rawData: finalUserData // Log full record for debugging
     });
     
     // Map HR data to our expected format - check multiple possible field names
     const mappedHr = {
-      ubuaccount: userData.ubuaccount || userData.account || userData.username || username,
-      prefix_name: userData.prefix_name || userData.prefix || 'นาย',
-      fname: userData.fname || userData.firstName || userData.first_name || '',
-      lname: userData.lname || userData.lastName || userData.last_name || '',
-      faculty: userData.faculty || userData.faculty_name || userData.facultyName || '',
-      department_name: userData.department_name || userData.department || userData.departmentName || '',
-      email: userData.email || `${username}@ubu.ac.th`,
-      position: userData.positiontype_name || userData.position || userData.positionName || '',
+      ubuaccount: finalUserData.ubuaccount || finalUserData.account || finalUserData.username || username,
+      prefix_name: finalUserData.prefix_name || finalUserData.prefix || 'นาย',
+      fname: finalUserData.fname || finalUserData.firstName || finalUserData.first_name || '',
+      lname: finalUserData.lname || finalUserData.lastName || finalUserData.last_name || '',
+      faculty: finalUserData.faculty || finalUserData.faculty_name || finalUserData.facultyName || '',
+      department_name: finalUserData.department_name || finalUserData.department || finalUserData.departmentName || '',
+      email: finalUserData.email || `${username}@ubu.ac.th`,
+      position: finalUserData.positiontype_name || finalUserData.position || finalUserData.positionName || '',
       status: 'active',
-      personcode: userData.personcode || userData.person_code || userData.personCode || '',
-      level_name: userData.level_name || userData.levelName || ''
+      personcode: finalUserData.personcode || finalUserData.person_code || finalUserData.personCode || '',
+      level_name: finalUserData.level_name || finalUserData.levelName || ''
     };
     
     console.log(`📦 Mapped HR data for ${username}:`, {
@@ -971,20 +1085,8 @@ async function fetchHrData(username) {
     
   } catch (error) {
     console.error('❌ Error fetching HR data:', error.message);
-    
-    // Fallback to mock data if HR API fails
-    console.log('⚠️ Using fallback mock data');
-    return {
-      ubuaccount: username,
-      prefix_name: 'นาย',
-      fname: 'ทดสอบ',
-      lname: 'ระบบ',
-      faculty: 'วิศวกรรมศาสตร์',
-      department_name: 'คอมพิวเตอร์',
-      email: `${username}@ubu.ac.th`,
-      position: 'อาจารย์',
-      status: 'active'
-    };
+    // ไม่ใช้ mock data แล้ว ให้ caller จัดการเอง (เช่น แสดง "ไม่ระบุ" หรือต้องกรอกเอง)
+    return null;
   }
 }
 
@@ -1295,24 +1397,8 @@ async function fetchModelsFromOpenRouter() {
     }
     console.log(`   ✅ Total unique models after merge: ${items.length}`);
     
-    // Verify we got a reasonable number of models (should be around 617)
-    if (items.length < 500) {
-      console.warn(`⚠️  Warning: Only received ${items.length} models, expected ~617.`);
-      console.warn(`   This is likely because OpenRouter API filters models based on:`);
-      console.warn(`   1. API key permissions/tier`);
-      console.warn(`   2. Model access restrictions (some models require explicit access requests)`);
-      console.warn(`   3. Regional availability`);
-      console.warn(`   To get all 617 models, you may need to:`);
-      console.warn(`   - Check OpenRouter dashboard for model access requests`);
-      console.warn(`   - Upgrade API key tier if applicable`);
-      console.warn(`   - Request access to specific models that are restricted`);
-      
-      // Log sample of model IDs to help debug
-      if (items.length > 0) {
-        const sampleIds = items.slice(0, 15).map(m => m.id);
-        console.warn(`   Sample model IDs received: ${sampleIds.join(', ')}`);
-      }
-    } else if (items.length >= 600) {
+    // Log model count (no warning for lower counts)
+    if (items.length >= 600) {
       console.log(`✅ Successfully fetched ${items.length} models (target: ~617)`);
     } else {
       console.log(`ℹ️  Fetched ${items.length} models (target: ~617, close but may be incomplete)`);
@@ -1657,13 +1743,11 @@ async function refreshModelsCache() {
     console.log(`✅ Models cache updated: ${newCount} models (was ${previousCount})`);
     if (newCount >= 600) {
       console.log(`🎉 Successfully cached ${newCount} models (target: ~617)`);
-    } else if (newCount < 500) {
-      console.warn(`⚠️  Warning: Only ${newCount} models cached, expected ~617. May need to check OpenRouter API.`);
     }
     if (embeddingCount > 0) {
       console.log(`📊 Including ${embeddingCount} text-embedding models (expected: ~22)`);
     } else {
-      console.warn(`⚠️  Warning: No embedding models detected (expected ~22)`);
+      console.log(`ℹ️  No embedding models detected in OpenRouter response (will use fallback list)`);
     }
     if (foundEmbeddings.length > 0) {
       console.log(`✅ Found specific embeddings: ${foundEmbeddings.join(', ')}`);
@@ -1718,8 +1802,6 @@ app.get('/api/models', async (req, res) => {
       console.log(`   📊 Embedding models in cache: ${embeddingCount}`);
       if (modelCount >= 600) {
         console.log(`✅ Cache contains ${modelCount} models (target: ~617)`);
-      } else if (embeddingCount === 0 && modelCount < 500) {
-        console.warn(`⚠️  Warning: No embedding models found in cache! This may indicate a detection issue.`);
       }
       return res.json({ models: modelsCache.data });
     }
@@ -1745,12 +1827,11 @@ app.get('/api/models', async (req, res) => {
     } else if (models.length >= 600) {
       console.log(`🎉 Successfully returning ${models.length} models (target: ~617)`);
       if (embeddingCount === 0) {
-        console.warn(`⚠️  Warning: No embedding models detected despite having ${models.length} total models!`);
+        console.log(`ℹ️  No embedding models detected in OpenRouter response (will use fallback list)`);
       }
     } else if (models.length < 500) {
-      console.warn(`⚠️  Warning: Only ${models.length} models available, expected ~617`);
       if (embeddingCount === 0) {
-        console.warn(`⚠️  Warning: No embedding models detected! This may indicate a detection issue.`);
+        console.log(`ℹ️  No embedding models detected in OpenRouter response (will use fallback list)`);
       }
     }
     
@@ -1762,7 +1843,7 @@ app.get('/api/models', async (req, res) => {
     
     // If no embedding models found, add fallback embedding models
     if (embeddingCount === 0 && models.length > 0) {
-      console.warn(`⚠️  No embedding models detected, adding fallback embedding models...`);
+      console.log(`ℹ️  No embedding models detected, adding fallback embedding models...`);
       
       const fallbackEmbeddings = [
         { id: 'openai/text-embedding-3-small', name: 'OpenAI Text Embedding 3 Small', pricing: { prompt_usd_per_m: 0.02, completion_usd_per_m: 0 }, context_length: 8191 },
@@ -2557,13 +2638,13 @@ app.get('/api/keys/usage', async (req, res) => {
 
 // Quick test endpoint: send a prompt with selected model using the user's API key
 app.post('/api/test-model', async (req, res) => {
-  const cookies = parseCookies(req);
-  const session = verify(cookies.session);
-  if (!session?.user) return res.status(401).json({ error: 'Unauthorized' });
-  const { keyId, model, prompt } = req.body || {};
-  if (!keyId || !model || !prompt) return res.status(400).json({ error: 'missing_params' });
   const client = await pool.connect();
   try {
+    const cookies = parseCookies(req);
+    const session = verify(cookies.session);
+    if (!session?.user) return res.status(401).json({ error: 'Unauthorized' });
+    const { keyId, model, prompt } = req.body || {};
+    if (!keyId || !model || !prompt) return res.status(400).json({ error: 'missing_params' });
     // verify key ownership
     const r = await client.query('SELECT id, user_id, key_value, is_active, credit_limit FROM api_keys WHERE id = $1', [keyId]);
     if (r.rowCount === 0) return res.status(404).json({ error: 'key_not_found' });
@@ -2639,7 +2720,9 @@ app.post('/api/test-model', async (req, res) => {
       
       if (!useKey) return res.status(401).json({ error: 'provider_key_missing' });
       
-      console.log(`   🔑 [test-model] Using provider key: ${useKey.substring(0, 12) + '...'}`);
+      console.log(`   🔑 [test-model] Using provider key: ${useKey.substring(0, 12) + '...'} (full length: ${useKey.length})`);
+      console.log(`   🔍 [test-model] Key matches OPENROUTER_TOKEN: ${useKey === OPENROUTER_TOKEN}`);
+      console.log(`   🔍 [test-model] Key starts with 'sk-or-v1': ${useKey.startsWith('sk-or-v1')}`);
       
       const resp = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
         model,
@@ -2714,6 +2797,7 @@ app.post('/api/test-model', async (req, res) => {
             
             // If fallback also fails with 401, it means global token is also invalid
             if (fallbackStatus === 401) {
+              console.log(`   📤 [test-model] Returning 401 error response (fallback failed with 401)`);
               return res.status(401).json({ 
                 error: 'invalid_api_key', 
                 message: 'Both the dedicated API key and global token are invalid or expired. Please contact administrator.',
@@ -2721,7 +2805,8 @@ app.post('/api/test-model', async (req, res) => {
               });
             }
             
-            return res.status(401).json({ 
+            console.log(`   📤 [test-model] Returning ${fallbackStatus || 401} error response (fallback failed)`);
+            return res.status(fallbackStatus || 401).json({ 
               error: 'invalid_api_key', 
               message: 'The API key is invalid or expired. Please check your API key or contact administrator.',
               details: errorData
@@ -2729,6 +2814,7 @@ app.post('/api/test-model', async (req, res) => {
           }
         } else {
           console.log(`   ℹ️ [test-model] Fallback not attempted: hasGlobalToken=${!!OPENROUTER_TOKEN}, providerKeyMatchesGlobal=${providerKey === OPENROUTER_TOKEN}`);
+          console.log(`   📤 [test-model] Returning 401 error response (fallback not attempted)`);
           return res.status(401).json({ 
             error: 'invalid_api_key', 
             message: 'The API key is invalid or expired. Please check your API key or contact administrator.',
@@ -2737,6 +2823,7 @@ app.post('/api/test-model', async (req, res) => {
         }
       } else {
         // return error from provider
+        console.log(`   📤 [test-model] Returning ${status} error response (provider error)`);
         return res.status(status).json({ 
           error: 'provider_error', 
           message: errorMessage,
@@ -2859,6 +2946,17 @@ app.post('/api/test-model', async (req, res) => {
     } catch {}
 
     res.json({ ok: true, modelUsed: data?.model || model, output: text, usage: { tokensIn, tokensOut } });
+  } catch (unexpectedError) {
+    // Catch any unexpected errors (e.g., database connection errors, JSON parsing errors, etc.)
+    console.error('❌ [test-model] Unexpected error:', unexpectedError);
+    // Ensure we always return valid JSON
+    if (!res.headersSent) {
+      return res.status(500).json({ 
+        error: 'internal_server_error', 
+        message: 'An unexpected error occurred. Please try again.',
+        details: process.env.NODE_ENV === 'development' ? unexpectedError.message : undefined
+      });
+    }
   } finally {
     client.release();
   }
@@ -3705,15 +3803,22 @@ app.patch('/api/admin/users/:id', async (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
 
-  const { role, status } = req.body;
+  const { role, status, faculty, department_name, position, level_name, email } = req.body || {};
   try {
     const client = await pool.connect();
     const result = await client.query(`
       UPDATE users 
-      SET role = $2, status = $3, updated_at = NOW()
+      SET role = $2,
+          status = $3,
+          faculty = COALESCE($4, faculty),
+          department_name = COALESCE($5, department_name),
+          position = COALESCE($6, position),
+          level_name = COALESCE($7, level_name),
+          email = COALESCE($8, email),
+          updated_at = NOW()
       WHERE id = $1
       RETURNING *
-    `, [req.params.id, role, status]);
+    `, [req.params.id, role, status, faculty, department_name, position, level_name, email]);
     client.release();
     
     if (result.rows.length === 0) {
@@ -3754,6 +3859,173 @@ app.delete('/api/admin/users/:id', async (req, res) => {
   } catch (error) {
     console.error('❌ Error deleting user:', error);
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Sync users with missing or "ไม่ระบุ" faculty/department from HR (admin only)
+app.post('/api/admin/users/sync-hr-unspecified', async (req, res) => {
+  console.log('🔄 POST /api/admin/users/sync-hr-unspecified - Sync users with missing/"ไม่ระบุ" faculty/department from HR');
+
+  // Check admin role
+  const cookies = parseCookies(req);
+  const session = verify(cookies.session);
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    console.log('❌ Unauthorized: Admin role required for HR sync');
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { limit } = req.body || {};
+  const limitNum = Math.min(Math.max(Number(limit) || 200, 1), 2000);
+
+  const client = await pool.connect();
+  try {
+    // เดิมเลือกเฉพาะคนที่ faculty/department เป็น "ไม่ระบุ"
+    // ตอนนี้เปลี่ยนเป็น "เลือกทุก user" (ภายใต้ limit) เพื่อบังคับให้ข้อมูลในระบบตรงกับ HR เสมอ
+    const usersResult = await client.query(
+      `
+      SELECT id, ubuaccount, fullname, faculty, department_name, email
+      FROM users
+      ORDER BY created_at ASC
+      LIMIT $1
+      `,
+      [limitNum]
+    );
+
+    const candidates = usersResult.rows;
+    console.log(`📊 [sync-hr-unspecified] Found ${candidates.length} candidate users (limit=${limitNum})`);
+
+    let attempted = 0;
+    let updatedCount = 0;
+    let notFoundInHr = 0;
+    let errorCount = 0;
+    let stillUnspecified = 0;
+    const details = [];
+
+    for (const user of candidates) {
+      const baseUsername =
+        user.ubuaccount ||
+        (user.email ? String(user.email).split('@')[0] : null);
+
+      if (!baseUsername) {
+        console.log(
+          `⚠️ [sync-hr-unspecified] Skip user id=${user.id} (no ubuaccount/email)`
+        );
+        details.push({
+          user_id: user.id,
+          ubuaccount: user.ubuaccount || null,
+          email: user.email || null,
+          status: 'skipped_no_username'
+        });
+        continue;
+      }
+
+      attempted++;
+      try {
+        console.log(
+          `🔍 [sync-hr-unspecified] Fetching HR data for user id=${user.id}, ubuaccount=${user.ubuaccount}, derivedUsername=${baseUsername}`
+        );
+        const hrData = await fetchHrData(baseUsername);
+
+        if (!hrData) {
+          console.log(
+            `❌ [sync-hr-unspecified] HR data not found for username=${baseUsername} (user id=${user.id})`
+          );
+          notFoundInHr++;
+          details.push({
+            user_id: user.id,
+            ubuaccount: user.ubuaccount || null,
+            email: user.email || null,
+            status: 'hr_not_found'
+          });
+          continue;
+        }
+
+        try {
+          const updatedUser = await createOrUpdateUser(hrData);
+          const faculty = updatedUser.faculty;
+          const department = updatedUser.department_name;
+
+          if (
+            faculty &&
+            faculty !== 'ไม่ระบุ' &&
+            department &&
+            department !== 'ไม่ระบุ'
+          ) {
+            updatedCount++;
+            console.log(
+              `✅ [sync-hr-unspecified] Updated user id=${updatedUser.id} with faculty="${faculty}", department="${department}"`
+            );
+            details.push({
+              user_id: updatedUser.id,
+              ubuaccount: updatedUser.ubuaccount || null,
+              email: updatedUser.email || null,
+              status: 'updated',
+              faculty,
+              department_name: department
+            });
+          } else {
+            stillUnspecified++;
+            console.log(
+              `⚠️ [sync-hr-unspecified] User id=${updatedUser.id} still missing/ไม่ระบุ faculty or department after HR sync`,
+              { faculty, department }
+            );
+            details.push({
+              user_id: updatedUser.id,
+              ubuaccount: updatedUser.ubuaccount || null,
+              email: updatedUser.email || null,
+              status: 'still_unspecified',
+              faculty,
+              department_name: department
+            });
+          }
+        } catch (updateError) {
+          errorCount++;
+          console.error(
+            `❌ [sync-hr-unspecified] Error updating user from HR data (user id=${user.id}):`,
+            updateError?.message || updateError
+          );
+          details.push({
+            user_id: user.id,
+            ubuaccount: user.ubuaccount || null,
+            email: user.email || null,
+            status: 'db_update_error',
+            error: updateError?.message || String(updateError)
+          });
+        }
+      } catch (hrError) {
+        errorCount++;
+        console.error(
+          `❌ [sync-hr-unspecified] Error fetching HR data for username=${baseUsername} (user id=${user.id}):`,
+          hrError?.message || hrError
+        );
+        details.push({
+          user_id: user.id,
+          ubuaccount: user.ubuaccount || null,
+          email: user.email || null,
+          status: 'hr_fetch_error',
+          error: hrError?.message || String(hrError)
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      total_candidates: candidates.length,
+      attempted,
+      updated: updatedCount,
+      still_unspecified: stillUnspecified,
+      hr_not_found: notFoundInHr,
+      errors: errorCount,
+      limit: limitNum,
+      details
+    });
+  } catch (e) {
+    console.error('❌ [sync-hr-unspecified] Unexpected error:', e);
+    return res
+      .status(500)
+      .json({ error: 'Failed to sync users from HR', details: e?.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -5558,6 +5830,9 @@ app.post('/api/admin/auto-disable-inactive', async (req, res) => {
   if (!session?.user || session.user.role !== 'ADMIN') {
     return res.status(403).json({ error: 'Admin access required' });
   }
+  
+  console.log(`🔔 [auto-disable-inactive] Auto-disable request initiated by admin: ${session.user.email || session.user.id} at ${new Date().toISOString()}`);
+  
   const client = await pool.connect();
   try {
     // Get auto-disable days setting
@@ -5583,8 +5858,21 @@ app.post('/api/admin/auto-disable-inactive', async (req, res) => {
       AND ak.created_at < $1
     `, [cutoffDate]);
     
+    console.log(`🔍 [auto-disable-inactive] Found ${inactiveKeys.rows.length} inactive keys (cutoff: ${cutoffDate.toISOString()}, days: ${days})`);
+    
     let disabledCount = 0;
     for (const key of inactiveKeys.rows) {
+      // Double-check: Don't disable if key was used recently (within last 24 hours)
+      const lastUsed = key.last_used_at ? new Date(key.last_used_at) : null;
+      const hoursSinceLastUse = lastUsed ? (Date.now() - lastUsed.getTime()) / (1000 * 60 * 60) : Infinity;
+      
+      if (hoursSinceLastUse < 24) {
+        console.log(`⚠️ [auto-disable-inactive] Skipping key ${key.id} (${key.name}): used ${hoursSinceLastUse.toFixed(1)} hours ago (too recent)`);
+        continue;
+      }
+      
+      console.log(`🔄 [auto-disable-inactive] Disabling key ${key.id} (${key.name}): last used ${lastUsed ? lastUsed.toISOString() : 'never'}`);
+      
       await client.query(
         'UPDATE api_keys SET is_active = false, updated_at = timezone(\'Asia/Bangkok\', now()) WHERE id = $1',
         [key.id]
@@ -5733,15 +6021,19 @@ if (enableV1) {
   console.log('✅ Public v1 endpoints enabled (dev2 compatibility)');
 
   const forwardToOpenRouter = async (req, res, targetUrl) => {
+    // Declare variables outside try block so they're accessible in catch block
+    let token = null;
+    let useKey = null;
+    let keyId = null;
+    let userId = null;
+    
     try {
       const auth = req.headers.authorization || '';
       if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'missing_bearer_token' });
-      const token = auth.slice('Bearer '.length).trim();
+      token = auth.slice('Bearer '.length).trim();
       
       // Resolve actual OpenRouter key from gateway API key
-      let useKey = token;
-      let keyId = null;
-      let userId = null;
+      useKey = token;
       const client = await pool.connect();
       try {
         // Check if this is a gateway key (starts with ubu_)
@@ -6002,17 +6294,29 @@ if (enableV1) {
       // Provide more helpful error messages
       if (status === 401) {
         if (errorMessage.includes('User not found') || errorMessage.includes('Invalid')) {
-          console.log(`   🔍 Debug info: token=${token?.substring(0, 8) + '...'}, keyId=${keyId}, useKey=${useKey ? useKey.substring(0, 12) + '...' : 'null'}, hasGlobalToken=${!!OPENROUTER_TOKEN}`);
+          console.log(`   🔍 Debug info: token=${token ? token.substring(0, 8) + '...' : 'null'}, keyId=${keyId}, useKey=${useKey ? useKey.substring(0, 12) + '...' : 'null'}, hasGlobalToken=${!!OPENROUTER_TOKEN}`);
           
           // Try fallback if:
           // 1. This is a gateway key (starts with ubu_)
           // 2. We have a keyId (meaning it's a valid gateway key)
           // 3. We have a global OPENROUTER_TOKEN
-          // 4. Either useKey is null/empty OR useKey is different from global token
-          const shouldTryFallback = token.startsWith('ubu_') && keyId && OPENROUTER_TOKEN && 
-            (!useKey || useKey !== OPENROUTER_TOKEN);
+          // Note: We try fallback even if useKey matches global token, because the stored key might be invalid/expired
+          const shouldTryFallback = token && token.startsWith('ubu_') && keyId && OPENROUTER_TOKEN;
           
           if (shouldTryFallback) {
+            const useKeyMatchesGlobal = useKey && OPENROUTER_TOKEN && useKey === OPENROUTER_TOKEN;
+            
+            // If provider key matches global token but failed, clear it from DB first
+            if (useKeyMatchesGlobal && keyId) {
+              const client3 = await pool.connect();
+              try {
+                await client3.query('UPDATE api_keys SET provider_key_value = NULL WHERE id = $1', [keyId]);
+                console.log(`   🔄 Cleared invalid provider key from database (matched global token but failed)`);
+              } finally {
+                client3.release();
+              }
+            }
+            
             console.warn(`   ⚠️ Provider key failed (${useKey ? 'dedicated key' : 'missing key'}), attempting fallback to global OPENROUTER_TOKEN`);
             try {
               const fallbackKey = OPENROUTER_TOKEN;
@@ -6030,8 +6334,8 @@ if (enableV1) {
               
               console.log(`   ✅ Fallback to global token succeeded`);
               
-              // Update provider_key_value to null so it uses global token next time
-              if (keyId) {
+              // Update provider_key_value to null so it uses global token next time (if not already cleared)
+              if (keyId && !useKeyMatchesGlobal) {
                 const client3 = await pool.connect();
                 try {
                   await client3.query('UPDATE api_keys SET provider_key_value = NULL WHERE id = $1', [keyId]);
@@ -6095,26 +6399,46 @@ if (enableV1) {
                 details: fallbackErrorData
               });
               
-              // If fallback also fails with 401, it means global token is also invalid
-              if (fallbackStatus === 401) {
-                return res.status(401).json({ 
-                  error: 'invalid_api_key', 
-                  message: 'Both the dedicated API key and global token are invalid or expired. Please contact administrator.',
-                  details: errorData
+              // Always return a response when fallback fails
+              if (!res.headersSent) {
+                if (fallbackStatus === 401) {
+                  console.log(`   📤 Returning 401 error response (fallback failed)`);
+                  return res.status(401).json({ 
+                    error: 'invalid_api_key', 
+                    message: 'Both the dedicated API key and global token are invalid or expired. Please contact administrator.',
+                    details: errorData
+                  });
+                }
+                // Return error for other status codes
+                console.log(`   📤 Returning ${fallbackStatus || 500} error response (fallback failed)`);
+                return res.status(fallbackStatus || 500).json({ 
+                  error: 'provider_error', 
+                  message: fallbackErrorData?.error?.message || fallbackErrorData?.message || fallbackError?.message || 'Fallback request failed',
+                  details: fallbackErrorData
                 });
               }
-              // Continue to return original error for other status codes
+              // If headers already sent, just return (should not happen, but safety check)
+              console.warn(`   ⚠️ Headers already sent, cannot return response`);
+              return;
             }
           } else {
-            console.log(`   ℹ️ Fallback not attempted: token=${token?.substring(0, 8) + '...'}, keyId=${keyId}, hasGlobalToken=${!!OPENROUTER_TOKEN}, useKeyMatchesGlobal=${useKey === OPENROUTER_TOKEN}`);
+            // This should not happen if logic is correct, but log for debugging
+            console.log(`   ℹ️ Fallback not attempted: token=${token ? token.substring(0, 8) + '...' : 'null'}, keyId=${keyId}, hasGlobalToken=${!!OPENROUTER_TOKEN}, useKeyMatchesGlobal=${useKey && OPENROUTER_TOKEN && useKey === OPENROUTER_TOKEN}`);
           }
           
-          return res.status(401).json({ 
-            error: 'invalid_api_key', 
-            message: 'The API key is invalid or expired. Please check your API key or contact administrator.',
-            details: errorData
-          });
+          // Only return if headers not already sent (fallback may have already returned)
+          if (!res.headersSent) {
+            console.log(`   📤 Returning 401 error response (no fallback or fallback not attempted)`);
+            return res.status(401).json({ 
+              error: 'invalid_api_key', 
+              message: 'The API key is invalid or expired. Please check your API key or contact administrator.',
+              details: errorData
+            });
+          } else {
+            console.warn(`   ⚠️ Headers already sent, cannot return response (no fallback or fallback not attempted)`);
+          }
         }
+        console.log(`   📤 Returning 401 error response (authentication failed)`);
         return res.status(401).json({ 
           error: 'authentication_failed', 
           message: 'Authentication failed with the provider.',
@@ -6122,6 +6446,7 @@ if (enableV1) {
         });
       }
       
+      console.log(`   📤 Returning ${status} error response (provider error)`);
       return res.status(status).json({ 
         error: 'provider_error', 
         message: errorMessage,
@@ -6132,24 +6457,58 @@ if (enableV1) {
 
   // POST /api/v1/chat/completions
   app.post('/api/v1/chat/completions', async (req, res) => {
-    console.log('📥 POST /api/v1/chat/completions - Request received');
-    console.log('   Auth header:', req.headers.authorization ? 'Present' : 'Missing');
-    console.log('   Body:', JSON.stringify(req.body || {}).substring(0, 200));
-    return forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/chat/completions');
+    try {
+      console.log('📥 POST /api/v1/chat/completions - Request received');
+      console.log('   Auth header:', req.headers.authorization ? 'Present' : 'Missing');
+      console.log('   Body:', JSON.stringify(req.body || {}).substring(0, 200));
+      return await forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/chat/completions');
+    } catch (error) {
+      console.error('❌ Unexpected error in /api/v1/chat/completions:', error);
+      // Ensure we always return valid JSON
+      if (!res.headersSent) {
+        return res.status(500).json({ 
+          error: 'internal_server_error', 
+          message: 'An unexpected error occurred. Please try again.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    }
   });
 
   // POST /api/v1/images/generations
   app.post('/api/v1/images/generations', async (req, res) => {
-    console.log('📥 POST /api/v1/images/generations - Request received');
-    return forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/images');
+    try {
+      console.log('📥 POST /api/v1/images/generations - Request received');
+      return await forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/images');
+    } catch (error) {
+      console.error('❌ Unexpected error in /api/v1/images/generations:', error);
+      if (!res.headersSent) {
+        return res.status(500).json({ 
+          error: 'internal_server_error', 
+          message: 'An unexpected error occurred. Please try again.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    }
   });
 
   // POST /api/v1/embeddings - Embeddings endpoint for n8n and Dify
   app.post('/api/v1/embeddings', async (req, res) => {
-    console.log('📥 POST /api/v1/embeddings - Request received');
-    console.log('   Auth header:', req.headers.authorization ? 'Present' : 'Missing');
-    console.log('   Body:', JSON.stringify(req.body || {}).substring(0, 200));
-    return forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/embeddings');
+    try {
+      console.log('📥 POST /api/v1/embeddings - Request received');
+      console.log('   Auth header:', req.headers.authorization ? 'Present' : 'Missing');
+      console.log('   Body:', JSON.stringify(req.body || {}).substring(0, 200));
+      return await forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/embeddings');
+    } catch (error) {
+      console.error('❌ Unexpected error in /api/v1/embeddings:', error);
+      if (!res.headersSent) {
+        return res.status(500).json({ 
+          error: 'internal_server_error', 
+          message: 'An unexpected error occurred. Please try again.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    }
   });
 
   // GET /api/v1/embeddings - Info endpoint for n8n connection testing
@@ -6414,10 +6773,8 @@ if (enableV1) {
           console.log(`📋 [v1/models] Added ${addedEmbeddings} embedding models from fallback list`);
         }
         
-        // Warn if we don't have enough models
-        if (modelIds.length < 500) {
-          console.warn(`⚠️  [v1/models] Only ${modelIds.length} models available, expected ~617. Cache may need refresh.`);
-        } else if (modelIds.length >= 600) {
+        // Log model count (no warning for lower counts)
+        if (modelIds.length >= 600) {
           console.log(`✅ [v1/models] ${modelIds.length} models available (target: ~617)`);
         }
       } else {
@@ -6536,9 +6893,7 @@ if (enableV1) {
       const finalCount = response.data.length;
       console.log(`📋 [v1/models] Returning ${finalCount} models in OpenAI format`);
       
-      if (finalCount < 500) {
-        console.warn(`⚠️  [v1/models] Warning: Only ${finalCount} models returned, expected ~617`);
-      } else if (finalCount >= 600) {
+      if (finalCount >= 600) {
         console.log(`✅ [v1/models] Successfully returning ${finalCount} models (target: ~617)`);
       }
       
@@ -6602,8 +6957,6 @@ app.listen(PORT, async () => {
       console.log(`✅ Initial models cache loaded: ${initialCount} models`);
       if (initialCount >= 600) {
         console.log(`🎉 Successfully loaded ${initialCount} models (target: ~617)`);
-      } else if (initialCount < 500) {
-        console.warn(`⚠️  Warning: Only ${initialCount} models loaded, expected ~617`);
       }
       const embeddingCount = modelsCache.data.filter(m => {
         const id = String(m.id || '').toLowerCase();

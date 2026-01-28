@@ -389,7 +389,12 @@ async function loadUserUsage() {
     if (filterStart.value) params.start = filterStart.value
     if (filterEnd.value) params.end = filterEnd.value
     console.log('🔍 [frontend] Loading user usage for user', selectedUser.value.id, 'with params:', params)
-    const res = await $fetch(`${apiBase}/api/admin/usage/user/${selectedUser.value.id}`, { params, credentials: 'include' }) as any
+    // Build API path: if apiBase already ends with /api, don't add /api again
+    const apiPath = apiBase.endsWith('/api') || apiBase === '/api' 
+      ? `${apiBase}/admin/usage/user/${selectedUser.value.id}`
+      : `${apiBase}/api/admin/usage/user/${selectedUser.value.id}`
+    console.log('🔍 [frontend] API path:', apiPath)
+    const res = await $fetch(apiPath, { params, credentials: 'include' }) as any
     console.log('🔍 [frontend] User usage response:', res)
     console.log('🔍 [frontend] Keys count:', res?.keys?.length || 0)
     if (res?.keys && res.keys.length > 0) {

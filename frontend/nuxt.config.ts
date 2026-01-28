@@ -1,4 +1,19 @@
 import { defineNuxtConfig } from "nuxt/config"
+import { readFileSync } from "fs"
+import { join } from "path"
+
+// Read version from version.json
+function getVersion(): string {
+  try {
+    const versionPath = join(__dirname, 'version.json')
+    const versionData = JSON.parse(readFileSync(versionPath, 'utf8'))
+    return versionData.version || '5.1.0'
+  } catch {
+    return '5.1.0'
+  }
+}
+
+const appVersion = getVersion()
 
 // Helper function to determine base path based on environment
 function getBasePath(): string {
@@ -73,7 +88,9 @@ export default defineNuxtConfig({
       apiBase: apiBase,
       // Base path: / สำหรับ aigateway.ubu.ac.th
       basePath: basePath,
-      appName: process.env.PUBLIC_APP_NAME || "UBU AI SERVICE"
+      appName: process.env.PUBLIC_APP_NAME || "UBU AI SERVICE",
+      // App version for display
+      appVersion: appVersion
     }
   },
 
