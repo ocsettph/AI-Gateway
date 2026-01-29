@@ -2,39 +2,15 @@
 import { useHead, useRuntimeConfig } from 'nuxt/app';
 import { ref, onMounted, computed } from 'vue';
 
-type NavCard = { title: string; href: string; icon: string; badge?: boolean }
+type NavCard = { title: string; titleTh?: string; href: string; icon: string; badge?: boolean }
 
 const cards = ref<NavCard[]>([
-  {
-    title: "Request Access",
-    href: "/request",
-    icon: "line-md:document-list",
-  },
-  {
-    title: "API Keys",
-    href: "/keys",
-    icon: "line-md:cog",
-  },
-  {
-    title: "Status",
-    href: "/status",
-    icon: "line-md:heart-filled-half",
-  },
-  {
-    title: "Documentation",
-    href: "/docs",
-    icon: "line-md:github",
-  },
-  {
-    title: "API Playground",
-    href: "/api-playground",
-    icon: "line-md:volume-high-filled",
-  },
-  {
-    title: "About",
-    href: "/about",
-    icon: "line-md:at",
-  },
+  { title: "Request Access", titleTh: "ขอใช้งาน", href: "/request", icon: "line-md:document-list" },
+  { title: "API Keys", titleTh: "คีย์ API", href: "/keys", icon: "line-md:cog" },
+  { title: "Status", titleTh: "สถานะ", href: "/status", icon: "line-md:heart-filled-half" },
+  { title: "Documentation", titleTh: "คู่มือ", href: "/docs", icon: "line-md:github" },
+  { title: "API Playground", titleTh: "ทดลอง API", href: "/api-playground", icon: "line-md:volume-high-filled" },
+  { title: "About", titleTh: "เกี่ยวกับ", href: "/about", icon: "line-md:at" },
 ])
 
 useHead({
@@ -122,7 +98,10 @@ onMounted(async () => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
               </svg>
             </div>
-            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ card.title }}</span>
+            <div class="flex flex-col gap-0.5 items-center">
+              <span class="text-sm font-medium text-gray-900 dark:text-white">{{ card.title }}</span>
+              <span v-if="card.titleTh" class="text-xs text-gray-500 dark:text-gray-400">{{ card.titleTh }}</span>
+            </div>
           </NuxtLink>
         </div>
       </div>
@@ -164,7 +143,7 @@ onMounted(async () => {
         <!-- Version Display -->
         <div class="mt-4 text-center">
           <span class="text-xs text-gray-400 dark:text-gray-500 font-mono">
-            ubu.ai.service V.{{ appVersion }}
+            aigateway.ubu V.{{ appVersion }}
           </span>
         </div>
       </header>
@@ -194,7 +173,10 @@ onMounted(async () => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
             </div>
-            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ card.title }}</span>
+            <div class="flex flex-col gap-0.5 items-center">
+              <span class="text-sm font-medium text-gray-900 dark:text-white">{{ card.title }}</span>
+              <span v-if="card.titleTh" class="text-xs text-gray-500 dark:text-gray-400">{{ card.titleTh }}</span>
+            </div>
           </NuxtLink>
         </div>
 			</div>
@@ -277,7 +259,10 @@ onMounted(async () => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ card.title }}</span>
+            <div class="flex flex-col gap-0.5 items-center">
+              <span class="text-sm font-medium text-gray-900 dark:text-white">{{ card.title }}</span>
+              <span v-if="card.titleTh" class="text-xs text-gray-500 dark:text-gray-400">{{ card.titleTh }}</span>
+            </div>
           </NuxtLink>
         </div>
         

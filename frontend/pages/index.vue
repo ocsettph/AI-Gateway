@@ -90,7 +90,7 @@ const services: ServiceOption[] = [
         <!-- Version Display -->
         <div class="mt-4 text-center">
           <span class="text-xs text-gray-400 dark:text-gray-500 font-mono">
-            ubu.ai.service V.{{ appVersion }}
+            aigateway.ubu V.{{ appVersion }}
           </span>
         </div>
       </header>

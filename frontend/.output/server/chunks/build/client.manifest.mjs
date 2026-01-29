@@ -99,7 +99,7 @@ const client_manifest = {
     "module": true,
     "prefetch": true,
     "preload": true,
-    "file": "BmyXutSI.js",
+    "file": "DATzTA0i.js",
     "name": "entry",
     "src": "node_modules/nuxt/dist/app/entry.js",
     "isEntry": true,
@@ -109,11 +109,11 @@ const client_manifest = {
       "node_modules/nuxt/dist/app/components/error-500.vue"
     ],
     "css": [
-      "entry.LrRLcss_.css"
+      "entry.D9goOgTu.css"
     ]
   },
-  "entry.LrRLcss_.css": {
-    "file": "entry.LrRLcss_.css",
+  "entry.D9goOgTu.css": {
+    "file": "entry.D9goOgTu.css",
     "resourceType": "style",
     "prefetch": true,
     "preload": true
@@ -133,7 +133,7 @@ const client_manifest = {
     "module": true,
     "prefetch": true,
     "preload": true,
-    "file": "DPu55cy6.js",
+    "file": "CgOfYEpm.js",
     "name": "about",
     "src": "pages/about.vue",
     "isDynamicEntry": true,
@@ -207,7 +207,7 @@ const client_manifest = {
     "module": true,
     "prefetch": true,
     "preload": true,
-    "file": "i9Sdnj9Q.js",
+    "file": "BRj3A2OS.js",
     "name": "ai-gateway",
     "src": "pages/ai-gateway.vue",
     "isDynamicEntry": true,
@@ -261,7 +261,7 @@ const client_manifest = {
     "module": true,
     "prefetch": true,
     "preload": true,
-    "file": "ROv-TYWh.js",
+    "file": "DHbfNXP_.js",
     "name": "index",
     "src": "pages/index.vue",
     "isDynamicEntry": true,
@@ -302,7 +302,7 @@ const client_manifest = {
     "module": true,
     "prefetch": true,
     "preload": true,
-    "file": "CUjpfiAS.js",
+    "file": "5T-ZEdRO.js",
     "name": "login",
     "src": "pages/login.vue",
     "isDynamicEntry": true,

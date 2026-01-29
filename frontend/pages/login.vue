@@ -39,6 +39,13 @@
           <img :src="base + 'assets/api_new.png'" alt="api" title="api" class="h-6 w-6 md:h-7 md:w-7 object-contain" />
         </div>
 
+        <!-- Version Display -->
+        <div class="mt-4 text-center">
+          <span class="text-xs text-gray-400 dark:text-gray-500 font-mono">
+            aigateway.ubu V.{{ appVersion }}
+          </span>
+        </div>
+
         <!-- login button below icons -->
         <div class="mt-8 flex items-center justify-center">
           <button
@@ -60,6 +67,8 @@
 <script setup lang="ts">
 import { useHead, useRuntimeConfig } from 'nuxt/app'
 useHead({ title: 'Login - UBU AI SERVICE' })
+
+const appVersion = (useRuntimeConfig().public as any).appVersion || '5.1.0'
 
 const startLogin = () => {
   const apiBase = (useRuntimeConfig().public.apiBase as string)

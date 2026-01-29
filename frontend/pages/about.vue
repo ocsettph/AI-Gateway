@@ -26,7 +26,9 @@
           </p>
           <div class="flex justify-center space-x-4">
             <a
-              href="mailto:odl@ubu.ac.th"
+              href="https://odl.ubu.ac.th"
+              target="_blank"
+              rel="noopener noreferrer"
               class="text-blue-600 dark:text-blue-400 hover:underline"
               >odl.ubu.ac.th</a
             >

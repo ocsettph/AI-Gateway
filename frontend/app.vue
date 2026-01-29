@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useHead, navigateTo, useRuntimeConfig, useRoute } from 'nuxt/app'
 // User display name (fetched from backend session)
 const displayName = ref<string | null>(null)
@@ -64,15 +64,33 @@ const logoLink = computed(() => {
   return isInAiGatewaySection ? '/ai-gateway' : '/'
 })
 
+// ปุ่มกลับ: หน้า index (/) ไม่แสดง, หน้า ai-gateway กลับไป /, หน้าอื่นกลับไป /ai-gateway
+const showBackButton = computed(() => {
+  const path = route.path
+  return path !== '/' && !path.startsWith('/login') && !path.startsWith('/callback')
+})
+const backLink = computed(() => {
+  const path = route.path
+  if (path === '/ai-gateway' || path.startsWith('/ai-gateway/')) return '/'
+  return '/ai-gateway'
+})
+
+// Header: โปร่งใสตอนอยู่บน, เบลอเมื่อเลื่อนลง
+const headerScrolled = ref(false)
+const onScroll = () => {
+  headerScrolled.value = window.scrollY > 24
+}
+
 onMounted(() => {
-  // Ensure dark mode is removed
   document.documentElement.classList.remove('dark')
-  
-  // Fetch user data
   fetchCurrentUser()
-  
-  // Listen for login success event to refresh user data
   window.addEventListener('user-login-success', fetchCurrentUser)
+  window.addEventListener('scroll', onScroll, { passive: true })
+  onScroll() // init state
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
 })
 
 useHead(() => {
@@ -97,15 +115,31 @@ useHead(() => {
 
 <template>
   <div class="min-h-screen bg-white">
-    <!-- Header -->
-    <header class="pt-6">
+    <!-- Header: โปร่งใสบนสุด → เบลอเมื่อเลื่อน -->
+    <header
+      class="sticky top-0 z-50 pt-2 pb-2 transition-[background,backdrop-filter] duration-300"
+      :class="headerScrolled ? 'bg-white/70 backdrop-blur-md shadow-[0_4px_20px_-6px_rgba(0,0,0,0.06)]' : 'bg-transparent'"
+    >
       <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center py-4">
-          <!-- Logo and Name (clickable, animated on hover) -->
-          <NuxtLink :to="logoLink" class="flex items-center space-x-2 group cursor-pointer">
+        <div class="flex justify-between items-center py-2">
+          <div class="flex items-center gap-3">
+            <NuxtLink
+              v-if="showBackButton"
+              :to="backLink"
+              class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              aria-label="Back"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+              </svg>
+              <span class="hidden sm:inline">Back</span>
+            </NuxtLink>
+            <!-- Logo and Name (clickable, animated on hover) -->
+            <NuxtLink :to="logoLink" class="flex items-center space-x-2 group cursor-pointer">
             <img :src="base + 'assets/UBU_AI_FLOW_icon.png'" alt="UBU AI SERVICE" class="h-8 w-8 object-contain group-hover:rotate-3 transition-transform duration-200">
             <span class="text-lg font-bold text-gray-900">UBU AI SERVICE</span>
-          </NuxtLink>
+            </NuxtLink>
+          </div>
           
           <div class="flex items-center gap-3">
             <span v-if="displayName" class="text-sm text-gray-600 truncate max-w-[200px]">
