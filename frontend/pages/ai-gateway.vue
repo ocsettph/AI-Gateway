@@ -8,9 +8,11 @@ const cards = ref<NavCard[]>([
   { title: "Request Access", titleTh: "ขอใช้งาน", href: "/request", icon: "line-md:document-list" },
   { title: "API Keys", titleTh: "คีย์ API", href: "/keys", icon: "line-md:cog" },
   { title: "Status", titleTh: "สถานะ", href: "/status", icon: "line-md:heart-filled-half" },
+  { title: "Chatbot Lab", titleTh: "ทดสอบบอท n8n", href: "/chatbot", icon: "line-md:chatbot" },
   { title: "Documentation", titleTh: "คู่มือ", href: "/docs", icon: "line-md:github" },
   { title: "API Playground", titleTh: "ทดลอง API", href: "/api-playground", icon: "line-md:volume-high-filled" },
   { title: "About", titleTh: "เกี่ยวกับ", href: "/about", icon: "line-md:at" },
+  { title: "Models", titleTh: "โมเดลที่รองรับ", href: "/models", icon: "line-md:star" },
 ])
 
 useHead({
@@ -31,6 +33,7 @@ const mobileCards = computed<NavCard[]>(() => {
     base.push({ title: 'Manage API Keys', href: '/admin/keys', icon: 'line-md:plus' })
     base.push({ title: 'Approve Requests', href: '/admin/requests', icon: 'line-md:check', badge: true })
     base.push({ title: 'Manage Users', href: '/admin/users', icon: 'line-md:account' })
+    base.push({ title: 'UBU DocAutomate', href: '/admin/doc-automate', icon: 'line-md:file-document' })
   }
   return base
 })
@@ -74,7 +77,7 @@ onMounted(async () => {
 
       <div class="hidden md:flex flex-col gap-8 lg:gap-10 absolute left-1/2 top-1/2 -translate-y-1/2 md:-translate-x-[300px] lg:-translate-x-[360px] xl:-translate-x-[420px] 2xl:-translate-x-[480px] z-10">
         <NuxtLink
-          v-for="(card, index) in cards.slice(0, 3)"
+          v-for="(card, index) in cards.slice(0, 4)"
           :key="`card-ml-${index}`"
           :to="card.href"
           class="w-28 lg:w-32 flex items-center justify-center transform hover:scale-105 transition-all dark:!bg-[#1a1a1a] dark:hover:!bg-[#222222] bg-white hover:bg-gray-50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-4 lg:p-6 block"
@@ -97,6 +100,9 @@ onMounted(async () => {
               </svg>
               <svg v-else-if="card.icon === 'line-md:heart-filled-half'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:chatbot'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3h6m-3 0v3m-6 4h12m-8 8h.01M14 18h.01M8 7h8a3 3 0 013 3v6a3 3 0 01-3 3H8a3 3 0 01-3-3v-6a3 3 0 013-3z"></path>
               </svg>
             </div>
             <div class="flex flex-col gap-0.5 items-center">
@@ -151,7 +157,7 @@ onMounted(async () => {
 
       <div class="hidden md:flex flex-col gap-8 lg:gap-10 absolute left-1/2 top-1/2 -translate-y-1/2 md:translate-x-[190px] lg:translate-x-[250px] xl:translate-x-[310px] 2xl:translate-x-[370px] z-10">
         <NuxtLink
-          v-for="(card, index) in cards.slice(3, 6)"
+          v-for="(card, index) in cards.slice(4, 8)"
           :key="`card-mr-${index}`"
           :to="card.href"
           class="w-28 lg:w-32 flex items-center justify-center transform hover:scale-105 transition-all dark:!bg-[#1a1a1a] dark:hover:!bg-[#222222] bg-white hover:bg-gray-50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-4 lg:p-6 block"
@@ -173,6 +179,12 @@ onMounted(async () => {
               </svg>
               <svg v-else-if="card.icon === 'line-md:at'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:star'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.96a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.447a1 1 0 00-.364 1.118l1.286 3.96c.3.922-.755 1.688-1.539 1.118l-3.367-2.447a1 1 0 00-1.176 0l-3.367 2.447c-.783.57-1.838-.196-1.539-1.118l1.286-3.96a1 1 0 00-.364-1.118L2.463 9.387c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.96z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:chatbot'" class="w-6 h-6 lg:w-7 lg:h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3h6m-3 0v3m-6 4h12m-8 8h.01M14 18h.01M8 7h8a3 3 0 013 3v6a3 3 0 01-3 3H8a3 3 0 01-3-3v-6a3 3 0 013-3z"></path>
               </svg>
             </div>
             <div class="flex flex-col gap-0.5 items-center">
@@ -215,6 +227,18 @@ onMounted(async () => {
               </svg>
             </div>
             <span class="text-sm font-medium text-gray-900 dark:text-white">Manage Users</span>
+          </div>
+        </NuxtLink>
+        <NuxtLink to="/admin/doc-automate" class="w-32 lg:w-36 flex items-center justify-center transform hover:scale-105 transition-all dark:!bg-[#1a1a1a] dark:hover:!bg-[#222222] bg-white hover:bg-gray-50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 p-6">
+          <div class="flex flex-col gap-2 items-center text-center">
+            <div class="w-10 h-10 flex items-center justify-center">
+              <svg class="w-7 h-7 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 3h6l4 4v14H7z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 3v4h4"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14h6M9 17h6"></path>
+              </svg>
+            </div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">UBU DocAutomate</span>
           </div>
         </NuxtLink>
       </div>
@@ -260,6 +284,17 @@ onMounted(async () => {
               </svg>
               <svg v-else-if="card.icon === 'line-md:check'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:file-document'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 3h6l4 4v14H7z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 3v4h4"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14h6M9 17h6"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:star'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.96a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.447a1 1 0 00-.364 1.118l1.286 3.96c.3.922-.755 1.688-1.539 1.118l-3.367-2.447a1 1 0 00-1.176 0l-3.367 2.447c-.783.57-1.838-.196-1.539-1.118l1.286-3.96a1 1 0 00-.364-1.118L2.463 9.387c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.96z"></path>
+              </svg>
+              <svg v-else-if="card.icon === 'line-md:chatbot'" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3h6m-3 0v3m-6 4h12m-8 8h.01M14 18h.01M8 7h8a3 3 0 013 3v6a3 3 0 01-3 3H8a3 3 0 01-3-3v-6a3 3 0 013-3z"></path>
               </svg>
             </div>
             <div class="flex flex-col gap-0.5 items-center">

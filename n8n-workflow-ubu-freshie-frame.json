@@ -1,0 +1,92 @@
+{
+  "name": "UBU Freshie Frame (AI Gateway webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## UBU Freshie Frame\n\n**รับจาก Gateway:** `composedImageBase64` (JPEG 1080×1080 ประกอบเฟรมแล้ว), `themeId`, `photo`, …\n\n**ตอบกลับ (เลือกอย่างใดอย่างหนึ่ง):**\n1. `{ \"imageUrl\": \"https://...\" }` — URL รูปที่โหลดได้จากเบราว์เซอร์ (เช่น Google Drive แชร์ลิงก์)\n2. `{ \"imageBase64\": \"...\" }` — Gateway จะเขียนเป็นไฟล์ชั่วคราวบนเซิร์ฟเวอร์ ส่ง URL `/api/public/freshie-frame/temp/...` แล้วลบไฟล์หลังดาวน์โหลด\n\n**แนะนำ Google Drive:** แทรกระหว่าง node \"เตรียม binary\" กับ \"Respond\":\n- **Google Drive → Upload** (binary จากขั้นตอนก่อน)\n- **Set** `imageUrl` = `https://drive.google.com/uc?export=download&id={{ $json.id }}` (หรือลิงก์ที่องค์กรใช้)\n- **Respond to Webhook**\n- **Wait** 15–30 วินาที\n- **Google Drive → Delete** ใช้ `id` จากขั้น Upload\n\nถ้ายังไม่ใส่ Drive: ปล่อย Respond แบบว่างหรือมีแค่ `themeId` — Gateway จะใช้รูปที่ประกอบบนเซิร์ฟเวอร์ให้อัตโนมัติ",
+        "height": 520,
+        "width": 380,
+        "color": 5
+      },
+      "id": "sticky-freshie-1",
+      "name": "คู่มือ",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [40, 120]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ubu-freshie-frame",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a8f3c2b1-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [460, 360],
+      "webhookId": "ubu-freshie-frame"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "// แยก body (Webhook v2 บางรุ่นใส่ JSON ใต้ .body)\nconst j = $input.first().json;\nconst p =\n  j.body && typeof j.body === 'object' && !Array.isArray(j.body) &&\n  (j.body.themeId != null || j.body.photo != null)\n    ? j.body\n    : j;\n\nconst themeId = String(p.themeId ?? '').trim();\nconst allowed = new Set([\n  '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '69-text1'\n]);\nif (!allowed.has(themeId)) {\n  throw new Error('themeId ไม่ถูกต้อง (รองรับ 1–12 และ 69-text1)');\n}\nconst b64 = p.composedImageBase64;\nif (!b64 || typeof b64 !== 'string') {\n  throw new Error('composedImageBase64 missing — Gateway ส่ง JPEG ประกอบเฟรมแล้ว');\n}\n\nconst buf = Buffer.from(String(b64).replace(/^data:[^;]+;base64,/i, ''), 'base64');\nconst fileName = `freshie-theme-${themeId}-${Date.now()}.jpg`;\n\n// ส่งต่อให้ Google Drive Upload: ใช้ binary ชื่อ \"data\" (ค่าเริ่มต้นของ node อัปโหลด)\nreturn [\n  {\n    json: { themeId, fileName, mimeType: 'image/jpeg' },\n    binary: {\n      data: {\n        data: buf.toString('base64'),\n        mimeType: 'image/jpeg',\n        fileName\n      }\n    }\n  }\n];"
+      },
+      "id": "a8f3c2b1-0002-4000-8000-000000000002",
+      "name": "เตรียม binary (Drive)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 360],
+      "settings": {}
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { themeId: $json.themeId } }}",
+        "options": {}
+      },
+      "id": "a8f3c2b1-0003-4000-8000-000000000003",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 360],
+      "settings": {}
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "เตรียม binary (Drive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "เตรียม binary (Drive)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "freshie-frame-v2",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

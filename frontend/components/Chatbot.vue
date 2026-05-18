@@ -160,7 +160,7 @@
                 : 'bg-white text-gray-800 rounded-tl-none border border-gray-200'
             ]"
           >
-            <p class="text-sm md:text-base whitespace-pre-wrap break-words">{{ message.content }}</p>
+            <p class="text-sm md:text-base whitespace-pre-wrap break-words">{{ message?.content ?? '' }}</p>
           </div>
           <p class="text-xs text-gray-500 mt-1" :class="message.role === 'user' ? 'text-right mr-2' : 'ml-2'">
             {{ formatTime(message.timestamp) }}
@@ -403,20 +403,25 @@ const sendMessage = async () => {
       const resp = response as any
       console.log('Parsing response object:', resp)
       
-      // Try common response fields
-      botResponse = resp.message || 
-                    resp.text || 
-                    resp.response || 
-                    resp.answer || 
-                    resp.output || 
-                    resp.data?.message ||
-                    resp.data?.text ||
-                    resp.data?.response ||
-                    resp.data?.answer ||
-                    resp.result ||
-                    resp.content ||
-                    resp.reply ||
-                    (Array.isArray(resp) && resp.length > 0 ? (typeof resp[0] === 'string' ? resp[0] : resp[0]?.message || resp[0]?.text || '') : '') ||
+      // Try common response fields (use optional chaining to avoid "reading 'content' of undefined")
+      botResponse = resp?.message ||
+                    resp?.text ||
+                    resp?.response ||
+                    resp?.answer ||
+                    (Array.isArray(resp?.output) && resp.output.length > 0
+                      ? (typeof resp.output[0] === 'string'
+                          ? resp.output[0]
+                          : resp.output[0]?.content?.[0]?.text ?? resp.output[0]?.content ?? resp.output[0]?.text ?? '')
+                      : resp?.output) ||
+                    resp?.data?.message ||
+                    resp?.data?.text ||
+                    resp?.data?.response ||
+                    resp?.data?.answer ||
+                    resp?.result ||
+                    resp?.content ||
+                    resp?.reply ||
+                    (Array.isArray(resp) && resp.length > 0 ? (typeof resp[0] === 'string' ? resp[0] : resp[0]?.message ?? resp[0]?.content ?? resp[0]?.text ?? '') : '') ||
+                    (resp?.choices?.[0]?.message?.content) ||
                     ''
       
       // If still empty, try to stringify and extract meaningful content
@@ -438,7 +443,7 @@ const sendMessage = async () => {
       if ((!botResponse || botResponse.trim() === '') && Array.isArray(resp) && resp.length > 0) {
         const firstItem = resp[0]
         if (typeof firstItem === 'object' && firstItem !== null) {
-          botResponse = firstItem.message || firstItem.text || firstItem.response || firstItem.answer || ''
+          botResponse = firstItem?.message ?? firstItem?.content ?? firstItem?.text ?? firstItem?.response ?? firstItem?.answer ?? ''
         }
       }
     }

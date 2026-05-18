@@ -4,7 +4,13 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import fssync from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import axios from 'axios';
+import sharp from 'sharp';
 
 dotenv.config();
 
@@ -92,6 +98,11 @@ app.use((req, res, next) => {
   if (req.path === '/api/oauth-login' || req.path === '/api/oauth/callback' || req.path.startsWith('/api/oauth')) {
     return next();
   }
+
+  // Public tools (no auth) — allow from any client IP when IP whitelist is enabled
+  if (req.path.startsWith('/api/public/')) {
+    return next();
+  }
   
   // Skip IP check if whitelist is disabled
   if (!IP_WHITELIST_ENABLED) {
@@ -144,6 +155,269 @@ const GOOGLE_CHAT_WEBHOOK_URL = process.env.GOOGLE_CHAT_WEBHOOK_URL || '';
 const GOOGLE_CHAT_API_KEY = process.env.GOOGLE_CHAT_API_KEY || '';
 const BASE_URL = process.env.BASE_URL || 'https://dev2.ubu.ac.th';
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || ''; // n8n webhook URL for invite tracking
+const N8N_DOC_AUTOMATE_WEBHOOK_URL = process.env.N8N_DOC_AUTOMATE_WEBHOOK_URL || '';
+const N8N_DOC_AUTOMATE_COPY_WEBHOOK_URL = process.env.N8N_DOC_AUTOMATE_COPY_WEBHOOK_URL || '';
+/** Webhook สร้างเฟรมรูปน้องใหม่ (รับ JSON จาก gateway แล้วตอบ URL รูปสำเร็จ) */
+const N8N_FRESHIE_FRAME_WEBHOOK_URL = process.env.N8N_FRESHIE_FRAME_WEBHOOK_URL || '';
+/** Webhook แปลงรูปอัปโหลดเป็นสไตล์อนิเมะ 3D ก่อนใส่เฟรม (ตอบ { imageUrl } หรือ { imageBase64 }) */
+const N8N_FRESHIE_ANIME_WEBHOOK_URL = process.env.N8N_FRESHIE_ANIME_WEBHOOK_URL || '';
+const FRESHIE_ANIME_TIMEOUT_MS = Number(process.env.FRESHIE_ANIME_TIMEOUT_MS || 120000);
+const FRESHIE_FRAME_ASSETS_DIR = String(process.env.FRESHIE_FRAME_ASSETS_DIR || '').trim();
+const N8N_APPROVAL_DELIVERY_MODE = String(process.env.N8N_APPROVAL_DELIVERY_MODE || 'n8n_server').toLowerCase();
+const N8N_WEBHOOK_TIMEOUT_MS = Number(process.env.N8N_WEBHOOK_TIMEOUT_MS || 60000);
+const N8N_WEBHOOK_MAX_RETRIES = Number(process.env.N8N_WEBHOOK_MAX_RETRIES || 4);
+const N8N_WEBHOOK_BASE_RETRY_DELAY_MS = Number(process.env.N8N_WEBHOOK_BASE_RETRY_DELAY_MS || 1000);
+const N8N_WEBHOOK_QUEUE_CONCURRENCY = Math.max(1, Number(process.env.N8N_WEBHOOK_QUEUE_CONCURRENCY || 1));
+const N8N_WEBHOOK_WORKER_INTERVAL_MS = Math.max(500, Number(process.env.N8N_WEBHOOK_WORKER_INTERVAL_MS || 1500));
+const N8N_WEBHOOK_PROCESSING_STALE_SECONDS = Math.max(30, Number(process.env.N8N_WEBHOOK_PROCESSING_STALE_SECONDS || 300));
+const INTERNAL_API_BASE_URL = process.env.INTERNAL_API_BASE_URL || `http://127.0.0.1:${PORT}`;
+let n8nWebhookWorkerRunning = false;
+let n8nWebhookWorkerTimer = null;
+
+function isRetryableWebhookError(error) {
+  const status = error?.response?.status;
+  if (status === 429 || (status >= 500 && status < 600)) return true;
+  const code = error?.code || '';
+  return ['ECONNRESET', 'ETIMEDOUT', 'ECONNABORTED', 'EAI_AGAIN', 'ENOTFOUND'].includes(code);
+}
+
+function toJobPayload(payload) {
+  if (!payload) return {};
+  if (typeof payload === 'string') {
+    try { return JSON.parse(payload); } catch (_) { return { raw: payload }; }
+  }
+  return payload;
+}
+
+function computeRetryDelayMs(attempt) {
+  const cappedAttempt = Math.max(1, Number(attempt || 1));
+  const backoff = N8N_WEBHOOK_BASE_RETRY_DELAY_MS * Math.pow(2, cappedAttempt - 1);
+  return Math.min(backoff, 5 * 60 * 1000);
+}
+
+async function enqueueN8nWebhook(url, payload, label = 'n8n webhook') {
+  if (!url) return;
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      INSERT INTO n8n_webhook_jobs (url, payload, label, status, max_attempts, next_attempt_at, created_at, updated_at)
+      VALUES ($1, $2::jsonb, $3, 'pending', $4, timezone('Asia/Bangkok', now()), timezone('Asia/Bangkok', now()), timezone('Asia/Bangkok', now()))
+    `, [url, JSON.stringify(payload || {}), label, N8N_WEBHOOK_MAX_RETRIES + 1]);
+  } finally {
+    client.release();
+  }
+}
+
+async function recoverStaleN8nWebhookJobs() {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      UPDATE n8n_webhook_jobs
+      SET status = 'retry',
+          next_attempt_at = timezone('Asia/Bangkok', now()),
+          updated_at = timezone('Asia/Bangkok', now()),
+          last_error = COALESCE(last_error, 'Recovered stale processing job')
+      WHERE status = 'processing'
+        AND updated_at < timezone('Asia/Bangkok', now()) - make_interval(secs => $1)
+      RETURNING id
+    `, [N8N_WEBHOOK_PROCESSING_STALE_SECONDS]);
+    if (result.rowCount > 0) {
+      console.warn(`⚠️ Recovered ${result.rowCount} stale n8n webhook job(s)`);
+    }
+  } finally {
+    client.release();
+  }
+}
+
+async function claimN8nWebhookJobs(limit) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(`
+      WITH picked AS (
+        SELECT id
+        FROM n8n_webhook_jobs
+        WHERE status IN ('pending', 'retry')
+          AND next_attempt_at <= timezone('Asia/Bangkok', now())
+        ORDER BY created_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT $1
+      )
+      UPDATE n8n_webhook_jobs j
+      SET status = 'processing',
+          last_attempt_at = timezone('Asia/Bangkok', now()),
+          attempts = COALESCE(j.attempts, 0) + 1,
+          result_message = NULL,
+          updated_at = timezone('Asia/Bangkok', now())
+      FROM picked
+      WHERE j.id = picked.id
+      RETURNING j.*
+    `, [limit]);
+    await client.query('COMMIT');
+    return result.rows;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+function extractQueueResultMessage(job, responseData) {
+  if (!responseData || typeof responseData !== 'object') return null;
+  // Internal n8n server invite endpoint format: { success, inviteLink, invitation }
+  const invitation = responseData?.invitation;
+  const emailSent = invitation?.user?.emailSent
+    ?? invitation?.emailSent
+    ?? invitation?.invitee?.emailSent
+    ?? responseData?.emailSent;
+  if (typeof emailSent === 'boolean') {
+    if (emailSent) return 'emailSent=true (n8n sent invite email)';
+    return 'emailSent=false (n8n did not send invite email)';
+  }
+  if (responseData?.error || invitation?.error) {
+    const errText = String(responseData?.error || invitation?.error || '').slice(0, 180);
+    return `invite created with warning: ${errText}`;
+  }
+  if (responseData?.success === true && job?.url?.includes('/api/n8n/create-invite')) {
+    return 'invite created (email delivery status unavailable)';
+  }
+  return null;
+}
+
+function extractInviteEmailSent(responseData) {
+  const invitation = responseData?.invitation;
+  return invitation?.user?.emailSent
+    ?? invitation?.emailSent
+    ?? invitation?.invitee?.emailSent
+    ?? responseData?.emailSent;
+}
+
+function extractInviteLink(responseData) {
+  const invitation = responseData?.invitation || {};
+  return responseData?.inviteLink
+    || invitation?.inviteAcceptUrl
+    || invitation?.inviteUrl
+    || invitation?.url
+    || invitation?.link
+    || null;
+}
+
+async function markN8nWebhookJobSent(id, resultMessage = null) {
+  await pool.query(`
+    UPDATE n8n_webhook_jobs
+    SET status = 'sent',
+        sent_at = timezone('Asia/Bangkok', now()),
+        updated_at = timezone('Asia/Bangkok', now()),
+        last_error = NULL,
+        result_message = $2
+    WHERE id = $1
+  `, [id, resultMessage]);
+}
+
+async function markN8nWebhookJobRetryOrFailed(job, error) {
+  const attempts = Number(job.attempts || 1);
+  const maxAttempts = Number(job.max_attempts || (N8N_WEBHOOK_MAX_RETRIES + 1));
+  const retryable = isRetryableWebhookError(error);
+  const canRetry = retryable && attempts < maxAttempts;
+  const nextAttempt = new Date(Date.now() + computeRetryDelayMs(attempts));
+  const errMessage = String(error?.message || error || 'unknown error').slice(0, 2000);
+
+  if (canRetry) {
+    await pool.query(`
+      UPDATE n8n_webhook_jobs
+      SET status = 'retry',
+          next_attempt_at = $2,
+          updated_at = timezone('Asia/Bangkok', now()),
+          last_error = $3,
+          result_message = NULL
+      WHERE id = $1
+    `, [job.id, nextAttempt, errMessage]);
+    return;
+  }
+
+  await pool.query(`
+    UPDATE n8n_webhook_jobs
+    SET status = 'failed',
+        updated_at = timezone('Asia/Bangkok', now()),
+        last_error = $2,
+        result_message = NULL
+    WHERE id = $1
+  `, [job.id, errMessage]);
+}
+
+async function processN8nWebhookJobs() {
+  if (n8nWebhookWorkerRunning) return;
+  n8nWebhookWorkerRunning = true;
+  try {
+    const jobs = await claimN8nWebhookJobs(N8N_WEBHOOK_QUEUE_CONCURRENCY);
+    if (!jobs.length) return;
+    await Promise.all(jobs.map(async (job) => {
+      const payload = toJobPayload(job.payload);
+      const label = job.label || `n8n webhook job ${job.id}`;
+      try {
+        const response = await axios.post(job.url, payload, { timeout: N8N_WEBHOOK_TIMEOUT_MS });
+        const responseData = response?.data || {};
+        let resultMessage = extractQueueResultMessage(job, responseData);
+
+        // Fallback: if n8n invite response does not confirm emailSent=true, send email via backend immediately.
+        if (job.url?.includes('/api/n8n/create-invite')) {
+          const emailSent = extractInviteEmailSent(responseData);
+          const inviteLink = extractInviteLink(responseData);
+          const targetEmail = payload?.email;
+          if (emailSent !== true && targetEmail && inviteLink) {
+            const requesterName = payload?.requesterName || 'ผู้ใช้งาน';
+            const apiKeyName = payload?.apiKeyName || 'API Key';
+            const department = payload?.department || '-';
+            const fallbackSubject = `เชิญใช้งาน n8n Workflow Automation - ${requesterName}`;
+            const fallbackHtml = `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #222;">
+              <h2>เชิญใช้งาน n8n Workflow Automation</h2>
+              <p>เรียนคุณ ${requesterName}</p>
+              <p>คำขอ <strong>${apiKeyName}</strong> ได้รับการอนุมัติแล้ว</p>
+              <p><strong>คณะ/หน่วยงาน:</strong> ${department}</p>
+              <p>กรุณาคลิกลิงก์ด้านล่างเพื่อเข้าร่วมใช้งาน n8n:</p>
+              <p><a href="${inviteLink}" target="_blank">${inviteLink}</a></p>
+              <p>ขอบคุณครับ<br/>UBU AI Team</p>
+            </div>`;
+            const fallbackText = `เรียนคุณ ${requesterName}\nคำขอ ${apiKeyName} ได้รับการอนุมัติแล้ว\nคณะ/หน่วยงาน: ${department}\nลิงก์เชิญใช้งาน n8n: ${inviteLink}`;
+            const fallbackOk = await sendEmail(targetEmail, fallbackSubject, fallbackHtml, fallbackText);
+            resultMessage = fallbackOk
+              ? 'invite created; backend fallback email sent'
+              : 'invite created but backend fallback email failed';
+          }
+        }
+
+        await markN8nWebhookJobSent(job.id, resultMessage);
+        if (resultMessage) {
+          console.log(`✅ ${label} sent (job ${job.id}, attempt ${job.attempts}) - ${resultMessage}`);
+        } else {
+          console.log(`✅ ${label} sent (job ${job.id}, attempt ${job.attempts})`);
+        }
+      } catch (error) {
+        await markN8nWebhookJobRetryOrFailed(job, error);
+        console.warn(`⚠️ ${label} failed (job ${job.id}, attempt ${job.attempts}):`, error?.message || error);
+      }
+    }));
+  } finally {
+    n8nWebhookWorkerRunning = false;
+  }
+}
+
+async function startN8nWebhookWorker() {
+  if (n8nWebhookWorkerTimer) return;
+  await recoverStaleN8nWebhookJobs().catch((e) => {
+    console.warn('⚠️ Failed to recover stale n8n webhook jobs:', e?.message || e);
+  });
+  processN8nWebhookJobs().catch((e) => {
+    console.warn('⚠️ n8n webhook worker initial run failed:', e?.message || e);
+  });
+  n8nWebhookWorkerTimer = setInterval(() => {
+    processN8nWebhookJobs().catch((e) => {
+      console.warn('⚠️ n8n webhook worker tick failed:', e?.message || e);
+    });
+  }, N8N_WEBHOOK_WORKER_INTERVAL_MS);
+}
 
 // simple in-memory cache for public data
 const modelsCache = { data: null, ts: 0 };
@@ -162,8 +436,10 @@ async function sendEmail(to, subject, htmlMessage, textMessage) {
       system: "SWDEV2"
     }, { timeout: 10000 });
     console.log(`✅ ส่งอีเมลเรียบร้อยแล้วถึง ${to}`);
+    return true;
   } catch (error) {
     console.error(`❌ ส่งอีเมลไม่สำเร็จ:`, error?.message || error);
+    return false;
   }
 }
 
@@ -683,6 +959,32 @@ async function ensureSchema() {
       VALUES ('auto_disable_inactive_days', '30', 'จำนวนวันที่ API key ไม่ได้ใช้งานก่อนปิดอัตโนมัติ (วัน)')
       ON CONFLICT (key) DO NOTHING;
     `);
+    await client.query(`
+      INSERT INTO admin_settings (key, value, description)
+      VALUES ('max_api_keys_per_user', '1', 'จำนวน API Key สูงสุดต่อผู้ใช้ (ถ้าถึงแล้วจะขอเพิ่มไม่ได้)')
+      ON CONFLICT (key) DO NOTHING;
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS n8n_webhook_jobs (
+        id BIGSERIAL PRIMARY KEY,
+        url TEXT NOT NULL,
+        payload JSONB NOT NULL,
+        label VARCHAR(255),
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 5,
+        next_attempt_at TIMESTAMP NOT NULL DEFAULT timezone('Asia/Bangkok', now()),
+        last_attempt_at TIMESTAMP NULL,
+        sent_at TIMESTAMP NULL,
+        last_error TEXT NULL,
+        result_message TEXT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT timezone('Asia/Bangkok', now()),
+        updated_at TIMESTAMP NOT NULL DEFAULT timezone('Asia/Bangkok', now())
+      );
+    `);
+    await client.query(`ALTER TABLE n8n_webhook_jobs ADD COLUMN IF NOT EXISTS result_message TEXT;`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_n8n_webhook_jobs_status_next_attempt ON n8n_webhook_jobs(status, next_attempt_at);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_n8n_webhook_jobs_created_at ON n8n_webhook_jobs(created_at);`);
 
     // usage logs - support both legacy and new columns
     await client.query(`
@@ -762,6 +1064,19 @@ async function ensureSchema() {
         cost_usd DECIMAL(12,6) DEFAULT 0,
         created_at TIMESTAMP DEFAULT timezone('Asia/Bangkok', now())
       );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS freshie_frame_stats (
+        id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        total_success BIGINT NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT timezone('Asia/Bangkok', now())
+      );
+    `);
+    await client.query(`
+      INSERT INTO freshie_frame_stats (id, total_success)
+      VALUES (1, 0)
+      ON CONFLICT (id) DO NOTHING;
     `);
   } finally {
     client.release();
@@ -2260,18 +2575,17 @@ app.get('/api/admin/usage', async (req, res) => {
         }
         
         // Get total usage for all keys of this user
-        // Handle both api_key_id and key_id columns
+        // Cast to text to avoid "integer = uuid" when column types differ
         let totalCost = 0;
         if (keyIds.length > 0) {
           try {
-            // Build IN clause for keyIds
-            const placeholders = keyIds.map((_, i) => `$${i + 1}`).join(', ');
+            const keyIdsText = keyIds.map(k => String(k));
             const usageQuery = `
               SELECT COALESCE(SUM(cost_usd), 0) as total_cost
               FROM api_usage_logs
-              WHERE api_key_id IN (${placeholders}) OR key_id IN (${placeholders})
+              WHERE api_key_id::text = ANY($1) OR key_id::text = ANY($1)
             `;
-            const usageResult = await client.query(usageQuery, [...keyIds, ...keyIds]);
+            const usageResult = await client.query(usageQuery, [keyIdsText]);
             totalCost = Number(usageResult.rows[0]?.total_cost || 0);
           } catch (usageError) {
             console.error('Error calculating usage for user', user.id, ':', usageError?.message || usageError);
@@ -2309,6 +2623,128 @@ app.get('/api/admin/usage', async (req, res) => {
       error: 'failed_to_query_usage',
       message: dbError?.message || 'Database connection failed'
     });
+  }
+});
+
+// Admin dashboard stats: cost per person, by faculty, request counts (optional filter by month: ?year=2025&month=2)
+app.get('/api/admin/stats', async (req, res) => {
+  const cookies = parseCookies(req);
+  const session = verify(cookies.session);
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  const { year, month, start: startParam, end: endParam } = req.query || {};
+  let dateStart = null;
+  let dateEnd = null;
+  if (startParam && endParam) {
+    dateStart = new Date(String(startParam));
+    dateEnd = new Date(String(endParam));
+  } else if (year && month) {
+    const y = Number(year);
+    const m = Number(month);
+    if (Number.isFinite(y) && Number.isFinite(m) && m >= 1 && m <= 12) {
+      dateStart = new Date(y, m - 1, 1);
+      dateEnd = new Date(y, m, 1);
+    }
+  }
+  const dateFilter = dateStart && dateEnd && !Number.isNaN(dateStart.getTime()) && !Number.isNaN(dateEnd.getTime());
+  const usageDateCond = dateFilter ? ' AND aul.created_at >= $2 AND aul.created_at < $3' : '';
+
+  try {
+    const client = await pool.connect();
+    try {
+      // Cost per person (with optional date filter on usage)
+      const baseResult = await client.query(`
+        SELECT DISTINCT u.id, u.fullname, u.faculty, u.email
+        FROM users u
+        INNER JOIN api_keys ak ON ak.user_id = u.id
+      `);
+      const users = baseResult.rows;
+      const byPerson = await Promise.all(users.map(async (user) => {
+        const keysResult = await client.query(
+          'SELECT id FROM api_keys WHERE user_id = $1',
+          [user.id]
+        );
+        const keyIds = keysResult.rows.map(k => k.id);
+        const keyIdsText = keyIds.map(k => String(k));
+        let totalCost = 0;
+        if (keyIds.length > 0) {
+          const usageResult = await client.query(
+            `SELECT COALESCE(SUM(aul.cost_usd), 0) as total_cost FROM api_usage_logs aul WHERE (aul.api_key_id::text = ANY($1) OR aul.key_id::text = ANY($1))${usageDateCond}`,
+            dateFilter ? [keyIdsText, dateStart, dateEnd] : [keyIdsText]
+          );
+          totalCost = Number(usageResult.rows[0]?.total_cost || 0);
+        }
+        return {
+          id: user.id,
+          label: user.fullname,
+          faculty: user.faculty || '-',
+          email: user.email,
+          total_spend: totalCost,
+          keys_count: keyIds.length
+        };
+      }));
+
+      // Build usage query with optional date filter (for byFaculty we aggregate from usage per key)
+      const usageSql = dateFilter
+        ? `SELECT key_id, api_key_id, COALESCE(SUM(cost_usd), 0) as cost FROM api_usage_logs WHERE created_at >= $1 AND created_at < $2 GROUP BY key_id, api_key_id`
+        : `SELECT key_id, api_key_id, COALESCE(SUM(cost_usd), 0) as cost FROM api_usage_logs GROUP BY key_id, api_key_id`;
+      const usageRows = await client.query(usageSql, dateFilter ? [dateStart, dateEnd] : []);
+
+      const spendByKey = await client.query(`
+        SELECT ak.id, ak.user_id, u.faculty
+        FROM api_keys ak
+        INNER JOIN users u ON u.id = ak.user_id
+      `);
+      const keyToFaculty = {};
+      spendByKey.rows.forEach(r => { keyToFaculty[String(r.id)] = r.faculty || 'ไม่ระบุ'; });
+      const facultySums = {};
+      const facultyUserIds = {};
+      spendByKey.rows.forEach(r => {
+        const fac = r.faculty || 'ไม่ระบุ';
+        if (facultySums[fac] == null) facultySums[fac] = 0;
+        if (!facultyUserIds[fac]) facultyUserIds[fac] = new Set();
+        facultyUserIds[fac].add(r.user_id);
+      });
+      usageRows.rows.forEach(row => {
+        const kid = row.api_key_id != null ? row.api_key_id : row.key_id;
+        const fac = keyToFaculty[String(kid)] || 'ไม่ระบุ';
+        if (facultySums[fac] != null) facultySums[fac] += Number(row.cost || 0);
+      });
+      const byFaculty = Object.entries(facultySums).map(([faculty, total_spend]) => ({
+        faculty,
+        user_count: facultyUserIds[faculty] ? facultyUserIds[faculty].size : 0,
+        keys_count: spendByKey.rows.filter(r => (r.faculty || 'ไม่ระบุ') === faculty).length,
+        total_spend
+      })).sort((a, b) => b.total_spend - a.total_spend);
+
+      // Request counts (optionally filtered by created_at in month)
+      const requestsSql = dateFilter
+        ? `SELECT status, COUNT(*) as count FROM api_key_requests WHERE created_at >= $1 AND created_at < $2 GROUP BY status`
+        : `SELECT status, COUNT(*) as count FROM api_key_requests GROUP BY status`;
+      const requestsResult = await client.query(requestsSql, dateFilter ? [dateStart, dateEnd] : []);
+      const requests = { total: 0, pending: 0, approved: 0, rejected: 0 };
+      requestsResult.rows.forEach(r => {
+        const c = Number(r.count || 0);
+        requests.total += c;
+        const s = (r.status || '').toLowerCase();
+        if (s === 'pending') requests.pending = c;
+        else if (s === 'approved') requests.approved = c;
+        else if (s === 'rejected') requests.rejected = c;
+      });
+
+      return res.json({
+        byPerson: byPerson.sort((a, b) => b.total_spend - a.total_spend),
+        byFaculty,
+        requests,
+        filter: dateFilter ? { start: dateStart.toISOString().slice(0, 10), end: dateEnd.toISOString().slice(0, 10) } : null
+      });
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('admin/stats error', e?.message || e);
+    res.status(500).json({ error: 'failed_to_fetch_stats', message: e?.message });
   }
 });
 
@@ -2965,10 +3401,31 @@ app.post('/api/test-model', async (req, res) => {
 });
 
 // --- Auth endpoints (real UBU Portal) ---
+function sanitizeOAuthReturnPath(raw, fallback = '/') {
+  const s = typeof raw === 'string' ? raw.trim() : '';
+  if (!s) return fallback;
+  if (s.includes('://') || s.startsWith('//')) return fallback;
+  const path = s.startsWith('/') ? s : `/${s}`;
+  if (path.includes('..')) return fallback;
+  return path;
+}
+
+function buildSpaUrlAfterOAuth(host, returnPath = '/') {
+  const path = sanitizeOAuthReturnPath(returnPath, '/');
+  if (host && host.includes('aigateway.ubu.ac.th')) {
+    return `https://aigateway.ubu.ac.th${path}`;
+  }
+  if (host && host.includes('dev2.ubu.ac.th')) {
+    const base = 'https://dev2.ubu.ac.th/ai_gateway';
+    return path === '/' ? `${base}/` : `${base}${path}`;
+  }
+  return `http://localhost:3000${path}`;
+}
+
 // GET endpoint for OAuth redirect to UBU Portal
 app.get('/api/oauth-login', (req, res) => {
   console.log('🔄 GET /api/oauth-login - Redirecting to UBU Portal');
-  const next = req.query.next || '/';
+  const next = sanitizeOAuthReturnPath(req.query.next, '/');
   
   // UBU Portal OAuth configuration
   const clientId = process.env.OAUTH_CLIENT_ID || 'ubu-ai-gateway';
@@ -3018,6 +3475,22 @@ app.get('/api/oauth-login', (req, res) => {
   const fullOauthUrl = `${oauthUrl}?${params.toString()}`;
   console.log(`📍 Redirecting to UBU Portal: ${fullOauthUrl}`);
   console.log(`🔗 Using redirect URI: ${redirectUri}`);
+  console.log(`↩️ OAuth return path (state): ${next}`);
+
+  const protocol = req.protocol || (req.get('x-forwarded-proto') || 'http');
+  const host = req.get('host') || req.get('x-forwarded-host') || 'localhost:3000';
+  if (next && next !== '/') {
+    setCookie(res, 'oauth_return_to', next, {
+      httpOnly: true,
+      path: '/',
+      maxAge: 600,
+      isHttps: protocol === 'https',
+      protocol,
+      host,
+      sameSite: 'Lax'
+    });
+  }
+
   res.redirect(fullOauthUrl);
 });
 
@@ -3436,15 +3909,22 @@ app.get('/api/oauth/callback', async (req, res) => {
     });
     console.log(`🍪 Session cookie set (GET) for host: ${host}, protocol: ${protocol}, https: ${isHttps}`);
 
-    // After setting cookie, redirect the browser back to the SPA
-    let frontendUrl;
-    if (host && host.includes('aigateway.ubu.ac.th')) {
-      frontendUrl = 'https://aigateway.ubu.ac.th/';
-    } else if (host && host.includes('dev2.ubu.ac.th')) {
-      frontendUrl = 'https://dev2.ubu.ac.th/ai_gateway/';
-    } else {
-      frontendUrl = 'http://localhost:3000/';
+    const cookies = parseCookies(req);
+    let returnPath = sanitizeOAuthReturnPath(req.query.state, '/');
+    if (returnPath === '/' && cookies.oauth_return_to) {
+      returnPath = sanitizeOAuthReturnPath(cookies.oauth_return_to, '/');
     }
+    const frontendUrl = buildSpaUrlAfterOAuth(host, returnPath);
+    console.log(`↩️ OAuth redirect to SPA: ${frontendUrl} (state=${req.query.state || '(none)'})`);
+    setCookie(res, 'oauth_return_to', '', {
+      httpOnly: true,
+      path: '/',
+      maxAge: 0,
+      isHttps: protocol === 'https',
+      protocol,
+      host,
+      sameSite: 'Lax'
+    });
     return res.redirect(frontendUrl);
   } catch (error) {
     console.error('❌ OAuth callback error (GET):', error.message);
@@ -4094,6 +4574,29 @@ app.post('/api/requests', async (req, res) => {
 
     const client = await pool.connect();
     try {
+      // ตรวจสอบจำนวน API Key ที่ user มีอยู่แล้ว (เฉพาะที่อนุมัติแล้ว)
+      // ยกเว้น ADMIN สามารถขอเพิ่มได้ไม่จำกัด
+      if (session.user.role !== 'ADMIN') {
+        const countResult = await client.query(
+          'SELECT COUNT(*) AS cnt FROM api_keys WHERE user_id = $1',
+          [session.user.id]
+        );
+        const currentKeyCount = Number(countResult.rows[0]?.cnt || 0);
+        const maxSetting = await client.query(
+          'SELECT value FROM admin_settings WHERE key = $1',
+          ['max_api_keys_per_user']
+        );
+        const maxAllowed = Math.max(1, Number(maxSetting.rows[0]?.value || 1));
+        if (currentKeyCount >= maxAllowed) {
+          return res.status(403).json({
+            error: 'max_keys_reached',
+            message: `คุณมี API Key ครบจำนวนที่กำหนดแล้ว (สูงสุด ${maxAllowed} คีย์ต่อผู้ใช้) ไม่สามารถขอเพิ่มได้`,
+            max_allowed: maxAllowed,
+            current_count: currentKeyCount
+          });
+        }
+      }
+
       const result = await client.query(`
         INSERT INTO api_key_requests (user_id, api_key_name, first_name, last_name, email, student_id, department, purpose, expected_usage, course_name, other_details, credit_limit, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
@@ -4101,7 +4604,8 @@ app.post('/api/requests', async (req, res) => {
       `, [session.user.id, apiKeyName, firstName, lastName, email, studentId, department, purpose, expectedUsage, courseName || null, otherDetails || null, creditLimit]);
 
       const reqRow = result.rows[0];
-      const approveUrl = `${BASE_URL}/ai_gateway/admin/requests?approve=${reqRow.id}`;
+      const frontendBase = (process.env.FRONTEND_BASE_PATH || '').replace(/\/$/, '');
+      const approveUrl = `${BASE_URL}${frontendBase}/admin/requests?approve=${reqRow.id}`;
       
       // Format Thai date: dd/mm/yyyy hh:mm:ss
       const now = new Date();
@@ -4275,18 +4779,13 @@ app.post('/api/invite/track', async (req, res) => {
         }
       };
 
-      axios.post(N8N_WEBHOOK_URL, webhookData, { timeout: 5000 })
-        .then(() => {
-          console.log('✅ Invite link click tracked in n8n:', {
-            event: webhookData.event,
-            userId: webhookData.user.id,
-            apiKeyName: webhookData.request.apiKeyName,
-            deviceType: webhookData.access.deviceType
-          });
-        })
-        .catch(err => {
-          console.warn('⚠️ Failed to send invite tracking webhook to n8n (non-critical):', err?.message || err);
-        });
+      enqueueN8nWebhook(
+        N8N_WEBHOOK_URL,
+        webhookData,
+        `Invite tracking webhook (user ${payload.userId}, request ${payload.requestId || 'n/a'})`
+      ).catch((err) => {
+        console.warn('⚠️ Failed to enqueue invite tracking webhook:', err?.message || err);
+      });
     }
 
     res.json({ success: true, message: 'Invite link click tracked' });
@@ -4740,12 +5239,39 @@ app.post('/api/admin/requests/:id/approve', async (req, res) => {
     `;
     const emailText = `เรียนคุณ ${recipientName},\n\nคำขอ API Key ของคุณได้รับการอนุมัติแล้ว\n\nชื่อคีย์: ${request.api_key_name}\nเครดิต: $${Number(request.credit_limit || 0).toFixed(2)}\nคณะ/หน่วยงาน: ${request.department || '-'}\n\n🎉 เข้าถึง API Key ของคุณ: ${inviteLink}\n(ลิงค์นี้ใช้ได้ 7 วัน)\n\nหรือเข้าถึงผ่าน: ${apiKeyUrl}`;
     
-    // Send webhook to n8n when API key is approved (if configured)
-    if (N8N_WEBHOOK_URL) {
-      // Get additional user info for webhook
-      const userInfo = userResult.rows[0] || {};
-      const approvedKey = keyResult.rows[0];
-      
+    // Deliver n8n invite after approval.
+    // Modes:
+    // - n8n_server (default): enqueue internal /api/n8n/create-invite (which calls n8n server /rest/invitations)
+    // - webhook: legacy webhook payload to N8N_WEBHOOK_URL
+    // - both: send both paths
+    const userInfo = userResult.rows[0] || {};
+    const approvedKey = keyResult.rows[0];
+    const deliveryMode = ['n8n_server', 'webhook', 'both'].includes(N8N_APPROVAL_DELIVERY_MODE)
+      ? N8N_APPROVAL_DELIVERY_MODE
+      : 'n8n_server';
+    const sendN8nServerInvite = deliveryMode === 'both' || deliveryMode === 'n8n_server';
+    const sendApprovalWebhook = deliveryMode === 'both' || deliveryMode === 'webhook';
+
+    if (sendN8nServerInvite) {
+      const apiKeyParam = process.env.N8N_API_KEY ? `?apiKey=${encodeURIComponent(process.env.N8N_API_KEY)}` : '';
+      const internalInviteUrl = `${INTERNAL_API_BASE_URL}/api/n8n/create-invite${apiKeyParam}`;
+      const requesterLabel = `${request.first_name || ''} ${request.last_name || ''}`.trim() || userEmail;
+      const requesterDept = request.department || userInfo.department_name || userInfo.faculty || '-';
+      enqueueN8nWebhook(
+        internalInviteUrl,
+        {
+          email: userEmail,
+          requesterName: recipientName,
+          apiKeyName: request.api_key_name,
+          department: request.department || userInfo.department_name || userInfo.faculty || '-'
+        },
+        `N8N server invite (request ${requestId}, user ${request.user_id}) | ${requesterLabel} | ${requesterDept}`
+      ).catch((err) => {
+        console.warn('⚠️ Failed to enqueue n8n server invite:', err?.message || err);
+      });
+    }
+
+    if (sendApprovalWebhook && N8N_WEBHOOK_URL) {
       const webhookData = {
         event: 'api_key_approved',
         timestamp: new Date().toISOString(),
@@ -4795,49 +5321,15 @@ app.post('/api/admin/requests/:id/approve', async (req, res) => {
         }
       };
 
-      axios.post(N8N_WEBHOOK_URL, webhookData, { timeout: 5000 })
-        .then(() => {
-          console.log('✅ API key approval webhook sent to n8n:', {
-            event: webhookData.event,
-            userId: webhookData.user.id,
-            apiKeyName: webhookData.request.apiKeyName
-          });
-        })
-        .catch(err => {
-          console.warn('⚠️ Failed to send webhook to n8n (non-critical):', err?.message || err);
-        });
-      
-      // Send invite to n8n for users who haven't used n8n yet
-      const N8N_INVITE_WEBHOOK_URL = process.env.N8N_INVITE_WEBHOOK_URL || '';
-      if (N8N_INVITE_WEBHOOK_URL) {
-        const inviteWebhookData = {
-          event: 'invite_user_to_n8n',
-          timestamp: new Date().toISOString(),
-          user: {
-            id: request.user_id,
-            email: userEmail,
-            firstName: request.first_name,
-            lastName: request.last_name,
-            fullname: userInfo.fullname || `${request.first_name} ${request.last_name}`,
-            ubuaccount: userInfo.ubuaccount || null,
-            faculty: userInfo.faculty || null,
-            department: userInfo.department_name || request.department || null,
-            position: userInfo.position || null
-          }
-        };
-        
-        axios.post(N8N_INVITE_WEBHOOK_URL, inviteWebhookData, { timeout: 5000 })
-          .then(() => {
-            console.log('✅ Invite user to n8n webhook sent:', {
-              event: inviteWebhookData.event,
-              userId: inviteWebhookData.user.id,
-              email: inviteWebhookData.user.email
-            });
-          })
-          .catch(err => {
-            console.warn('⚠️ Failed to send invite webhook to n8n (non-critical):', err?.message || err);
-          });
-      }
+      enqueueN8nWebhook(
+        N8N_WEBHOOK_URL,
+        webhookData,
+        `API key approval webhook (request ${requestId})`
+      ).catch((err) => {
+        console.warn('⚠️ Failed to enqueue API key approval webhook:', err?.message || err);
+      });
+    } else if (sendApprovalWebhook && !N8N_WEBHOOK_URL) {
+      console.warn('⚠️ N8N_APPROVAL_DELIVERY_MODE=webhook/both requires N8N_WEBHOOK_URL, but URL is not configured');
     }
 
     // notify approval to admin (do not include full key for security)
@@ -4940,6 +5432,878 @@ app.post('/api/admin/requests/:id/reject', async (req, res) => {
   } catch (error) {
     console.error('Error rejecting request:', error);
     res.status(500).json({ error: 'Failed to reject request' });
+  }
+});
+
+// Admin: UBU DocAutomate - call n8n and wait for docUrl
+app.post('/api/admin/doc-automate/submit', async (req, res) => {
+  try {
+    const session = verify(parseCookies(req).session);
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    if (!N8N_DOC_AUTOMATE_WEBHOOK_URL) {
+      return res.status(500).json({
+        error: 'N8N_DOC_AUTOMATE_WEBHOOK_URL is not configured'
+      });
+    }
+
+    const { file = {} } = req.body || {};
+
+    const fileName = String(file?.name || '').trim();
+    const mimeType = String(file?.mimeType || 'application/octet-stream').trim();
+    const contentBase64 = String(file?.contentBase64 || '').trim();
+    const fileSize = Number(file?.size || 0);
+
+    if (!fileName || !contentBase64) {
+      return res.status(400).json({
+        error: 'file(contentBase64) is required'
+      });
+    }
+
+    const decodedSize = Buffer.from(contentBase64, 'base64').length;
+    if (decodedSize <= 0 || decodedSize > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Invalid file size (max 5MB)' });
+    }
+
+    const actorEmail = session?.user?.email || '';
+    const actorName = session?.user?.fullname || session?.user?.username || 'unknown';
+    const actorDepartment = session?.user?.department || session?.user?.department_name || '-';
+    const actorFaculty = session?.user?.faculty || '-';
+    const generatedTitle = `UBU DocAutomate - ${actorName} - ${new Date().toISOString().slice(0, 10)}`;
+
+    const webhookData = {
+      event: 'ubu_doc_automate_submit',
+      timestamp: new Date().toISOString(),
+      actor: {
+        id: session?.user?.id || null,
+        email: actorEmail,
+        fullName: actorName,
+        department: actorDepartment,
+        faculty: actorFaculty,
+        role: session?.user?.role || 'ADMIN'
+      },
+      document: {
+        title: generatedTitle,
+        file: {
+          name: fileName,
+          mimeType,
+          size: fileSize || decodedSize,
+          contentBase64
+        }
+      }
+    };
+
+    const n8nResponse = await axios.post(
+      N8N_DOC_AUTOMATE_WEBHOOK_URL,
+      webhookData,
+      { timeout: N8N_WEBHOOK_TIMEOUT_MS }
+    );
+    const data = n8nResponse?.data || {};
+    const docUrl = data?.docUrl || data?.url || data?.documentUrl || data?.googleDocUrl || null;
+    const docId = data?.docId || data?.documentId || null;
+
+    if (!docUrl) {
+      return res.status(502).json({
+        error: 'n8n_response_missing_doc_url',
+        message: 'n8n ยังไม่ส่ง docUrl กลับมา กรุณาปรับ workflow response'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'สร้าง Google Doc สำเร็จ',
+      docUrl,
+      docId
+    });
+  } catch (error) {
+    console.error('Error submitting UBU DocAutomate job:', error);
+    const status = Number(error?.response?.status || 0);
+    if (error?.code === 'ECONNABORTED') {
+      return res.status(504).json({
+        error: 'n8n_timeout',
+        message: `n8n ใช้เวลานานเกิน ${N8N_WEBHOOK_TIMEOUT_MS}ms หรือยังไม่ตอบกลับ (ตรวจว่า workflow active และใช้ webhook URL ให้ตรง test/production)`
+      });
+    }
+    if (status === 413) {
+      return res.status(413).json({
+        error: 'doc_automate_payload_too_large',
+        message: 'ไฟล์หลักฐานมีขนาดใหญ่เกินที่ n8n/nginx รับได้ (413). กรุณาลดขนาดรูป หรือเพิ่ม client_max_body_size ฝั่ง nginx'
+      });
+    }
+    return res.status(500).json({
+      error: 'Failed to submit UBU DocAutomate job',
+      message: error?.response?.data?.message || error?.message || 'Unknown error'
+    });
+  }
+});
+
+// Admin: UBU DocAutomate Copy - call n8n without file payload
+app.post('/api/admin/doc-automate/copy', async (req, res) => {
+  try {
+    const session = verify(parseCookies(req).session);
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    if (!N8N_DOC_AUTOMATE_COPY_WEBHOOK_URL) {
+      return res.status(500).json({
+        error: 'N8N_DOC_AUTOMATE_COPY_WEBHOOK_URL is not configured'
+      });
+    }
+
+    const actorEmail = session?.user?.email || '';
+    const actorName = session?.user?.fullname || session?.user?.username || 'unknown';
+    const actorDepartment = session?.user?.department || session?.user?.department_name || '-';
+    const actorFaculty = session?.user?.faculty || '-';
+    const generatedTitle = `UBU DocAutomate - ${actorName} - ${new Date().toISOString().slice(0, 10)}`;
+
+    const webhookData = {
+      // Keep schema aligned with submit flow, but omit document.file
+      event: 'ubu_doc_automate_submit',
+      timestamp: new Date().toISOString(),
+      actor: {
+        id: session?.user?.id || null,
+        email: actorEmail,
+        fullName: actorName,
+        department: actorDepartment,
+        faculty: actorFaculty,
+        role: session?.user?.role || 'ADMIN'
+      },
+      document: {
+        title: generatedTitle
+      }
+    };
+
+    const n8nResponse = await axios.post(
+      N8N_DOC_AUTOMATE_COPY_WEBHOOK_URL,
+      webhookData,
+      { timeout: N8N_WEBHOOK_TIMEOUT_MS }
+    );
+    const data = n8nResponse?.data || {};
+    const docUrl = data?.docUrl || data?.url || data?.documentUrl || data?.googleDocUrl || null;
+    const docId = data?.docId || data?.documentId || null;
+
+    if (!docUrl) {
+      return res.status(502).json({
+        error: 'n8n_response_missing_doc_url',
+        message: 'ระบบยังไม่ได้ลิงก์ Google Doc กลับมา กรุณาตรวจ workflow และการตอบกลับ'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'เริ่มทำสำเนาไฟล์สำเร็จ',
+      docUrl,
+      docId
+    });
+  } catch (error) {
+    console.error('Error submitting UBU DocAutomate copy job:', error);
+    const status = Number(error?.response?.status || 0);
+    if (error?.code === 'ECONNABORTED') {
+      return res.status(504).json({
+        error: 'n8n_timeout',
+        message: `n8n ใช้เวลานานเกิน ${N8N_WEBHOOK_TIMEOUT_MS}ms หรือยังไม่ตอบกลับ (ตรวจว่า workflow active และใช้ webhook URL ให้ตรง test/production)`
+      });
+    }
+    if (status === 413) {
+      return res.status(413).json({
+        error: 'doc_automate_copy_payload_too_large',
+        message: 'Payload ที่ส่งไปมีขนาดใหญ่เกินที่ n8n/nginx รับได้ (413)'
+      });
+    }
+    return res.status(500).json({
+      error: 'Failed to submit UBU DocAutomate copy job',
+      message: error?.response?.data?.message || error?.message || 'Unknown error'
+    });
+  }
+});
+
+// Public: น้องใหม่ UBU — ประกอบเฟรมบนเซิร์ฟเวอร์ (Sharp) แล้วส่ง n8n (ถ้ามี) รับกลับ imageUrl หรือ imageBase64
+const freshieTempFiles = new Map();
+
+function freshieFrameMissingIds(dir) {
+  const missing = [];
+  for (let i = 1; i <= 12; i++) {
+    const id = String(i);
+    if (!fssync.existsSync(path.join(dir, `UBU${id}.png`))) missing.push(id);
+  }
+  return missing;
+}
+
+/** โฟลเดอร์ที่มี UBU1.png … UBU12.png ครบเท่านั้น (ไม่ยอมรับโฟลเดอร์ที่มีแค่บางไฟล์) */
+function freshieFrameAssetsDir() {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [];
+  if (FRESHIE_FRAME_ASSETS_DIR) candidates.push(path.resolve(FRESHIE_FRAME_ASSETS_DIR));
+  candidates.push(
+    path.resolve(path.join(here, '..', 'frontend', 'public', 'assets', 'freshie-frame')),
+    path.resolve(path.join(here, '..', 'frontend', '.output', 'public', 'assets', 'freshie-frame')),
+    path.resolve(path.join(here, 'public', 'assets', 'freshie-frame')),
+    path.resolve(path.join(process.cwd(), 'frontend', 'public', 'assets', 'freshie-frame')),
+    path.resolve(path.join(process.cwd(), 'frontend', '.output', 'public', 'assets', 'freshie-frame')),
+    path.resolve(path.join(process.cwd(), 'public', 'assets', 'freshie-frame')),
+    path.resolve(path.join(process.cwd(), '..', 'frontend', 'public', 'assets', 'freshie-frame')),
+    path.resolve(path.join(process.cwd(), '..', 'frontend', '.output', 'public', 'assets', 'freshie-frame'))
+  );
+  const seen = new Set();
+  const uniq = [];
+  for (const p of candidates) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    uniq.push(p);
+  }
+  const lines = [];
+  for (const dir of uniq) {
+    if (!fssync.existsSync(dir)) {
+      lines.push(`  — ${dir} (ไม่มีโฟลเดอร์)`);
+      continue;
+    }
+    const missing = freshieFrameMissingIds(dir);
+    if (missing.length === 0) return dir;
+    lines.push(
+      `  — ${dir} (ขาด: ${missing.map((i) => `UBU${i}.png`).join(', ')})`
+    );
+  }
+  throw new Error(
+    `ไม่พบโฟลเดอร์เฟรมที่มี UBU1.png…UBU12.png ครบ — ตั้ง FRESHIE_FRAME_ASSETS_DIR หรือวางไฟล์ใน frontend/public/… หรือ frontend/.output/public/… หรือ backend/public/assets/freshie-frame/\nสแกนแล้ว:\n${lines.join('\n')}`
+  );
+}
+
+const FRESHIE_TEXT_THEME_IDS = new Set(['69-text1']);
+const FRESHIE_FRAME_FILES = {
+  '69-text1': 'UBU69_TEXT1.png'
+};
+
+function freshieFramePngFileName(themeId) {
+  return FRESHIE_FRAME_FILES[themeId] || `UBU${themeId}.png`;
+}
+
+async function composeFreshieFrameJpeg(themeId, inputBuffer) {
+  const dir = freshieFrameAssetsDir();
+  const frameFile = freshieFramePngFileName(themeId);
+  const framePath = path.join(dir, frameFile);
+  if (!fssync.existsSync(framePath)) {
+    throw new Error(`ไม่พบไฟล์เฟรม ${frameFile} ใน ${dir}`);
+  }
+  const OUT = 1080;
+  const photoJpeg = await sharp(inputBuffer)
+    .rotate()
+    .resize(OUT, OUT, { fit: 'cover', position: 'centre' })
+    .jpeg({ quality: 92 })
+    .toBuffer();
+  const framePng = await sharp(framePath)
+    .resize(OUT, OUT, { fit: 'fill' })
+    .ensureAlpha()
+    .png()
+    .toBuffer();
+  return await sharp(photoJpeg).composite([{ input: framePng, blend: 'over' }]).jpeg({ quality: 90 }).toBuffer();
+}
+
+function stripDataUrlBase64(s) {
+  const t = String(s || '').trim();
+  const m = /^data:[^;]+;base64,(.+)$/i.exec(t);
+  return m ? m[1] : t;
+}
+
+function extractN8nImageUrl(data) {
+  if (!data || typeof data !== 'object') return null;
+  const url =
+    data.imageUrl ||
+    data.imageURL ||
+    data.url ||
+    data.downloadUrl ||
+    data.fileUrl ||
+    data.resultUrl ||
+    (typeof data.image === 'string' && /^https?:\/\//i.test(data.image) ? data.image : null);
+  if (!url || typeof url !== 'string') return null;
+  if (url.includes('picsum.photos')) return null;
+  if (!/^https?:\/\//i.test(url)) return null;
+  return url;
+}
+
+function extractN8nImageBase64(data) {
+  if (!data || typeof data !== 'object') return null;
+  const keys = ['imageBase64', 'resultBase64'];
+  for (const k of keys) {
+    const v = data[k];
+    if (typeof v === 'string' && v.length > 200) return v;
+  }
+  return null;
+}
+
+/** แกะ payload จาก n8n Respond (บางครั้งห่อใน body) */
+function normalizeFreshieN8nPayload(raw) {
+  let data = Array.isArray(raw) ? (raw[0] ?? {}) : raw;
+  if (!data || typeof data !== 'object') return {};
+  if (data.body && typeof data.body === 'object' && !Array.isArray(data.body)) {
+    data = data.body;
+  }
+  return data;
+}
+
+/** รองรับกรณี n8n ส่ง OpenRouter chat/completions ตรงๆ (ยังไม่ผ่าน node ดึงรูป) */
+function openRouterChatHasImages(data) {
+  if (!data || typeof data !== 'object') return false;
+  const msg = data?.choices?.[0]?.message;
+  if (!msg) return false;
+  if (Array.isArray(msg.images) && msg.images.length > 0) return true;
+  const c = msg.content;
+  if (typeof c === 'string' && /^data:image\//i.test(c.trim())) return true;
+  if (Array.isArray(c)) {
+    return c.some(
+      (p) =>
+        (p?.type === 'image_url' && p?.image_url?.url) ||
+        (typeof p?.text === 'string' && /^data:image\//i.test(p.text.trim()))
+    );
+  }
+  return false;
+}
+
+/** บาง provider ใส่รูปใน message.content แทน message.images */
+function normalizeOpenRouterImageCompletion(data) {
+  if (!data?.choices?.[0]?.message) return data;
+  const msg = data.choices[0].message;
+  if (Array.isArray(msg.images) && msg.images.length > 0) return data;
+
+  const fromContent = [];
+  const c = msg.content;
+  if (typeof c === 'string' && /^data:image\//i.test(c.trim())) {
+    fromContent.push({ type: 'image_url', image_url: { url: c.trim() } });
+  } else if (Array.isArray(c)) {
+    for (const part of c) {
+      if (part?.type === 'image_url' && part?.image_url?.url) {
+        fromContent.push(part);
+      } else if (typeof part?.text === 'string' && /^data:image\//i.test(part.text.trim())) {
+        fromContent.push({ type: 'image_url', image_url: { url: part.text.trim() } });
+      }
+    }
+  }
+  if (fromContent.length) {
+    msg.images = fromContent;
+  }
+  return data;
+}
+
+function extractImageFromChatCompletionPayload(data) {
+  if (!data || typeof data !== 'object') return null;
+  const norm = normalizeOpenRouterImageCompletion(JSON.parse(JSON.stringify(data)));
+  const msg = norm?.choices?.[0]?.message;
+  const images = msg?.images;
+  if (!Array.isArray(images) || !images.length) return null;
+  const url = images[0]?.image_url?.url || images[0]?.imageUrl?.url;
+  if (!url || typeof url !== 'string') return null;
+  if (/^https?:\/\//i.test(url)) return { imageUrl: url, mimeType: 'image/png' };
+  if (url.startsWith('data:')) {
+    const m = url.match(/^data:([^;]+);base64,(.+)$/i);
+    if (m) return { imageBase64: m[2], mimeType: m[1] || 'image/png' };
+  }
+  return null;
+}
+
+async function registerFreshieTempJpeg(buffer) {
+  const token = crypto.randomBytes(18).toString('hex');
+  const pth = path.join(os.tmpdir(), `ubu-freshie-${token}.jpg`);
+  await fs.writeFile(pth, buffer);
+  const timer = setTimeout(() => {
+    void unlinkFreshieTemp(token);
+  }, 30 * 60 * 1000);
+  freshieTempFiles.set(token, { path: pth, timer });
+  return token;
+}
+
+async function unlinkFreshieTemp(token) {
+  const rec = freshieTempFiles.get(token);
+  const diskPath = path.join(os.tmpdir(), `ubu-freshie-${token}.jpg`);
+  const pth = rec?.path || diskPath;
+  if (rec) {
+    freshieTempFiles.delete(token);
+    if (rec.timer) clearTimeout(rec.timer);
+  }
+  try {
+    await fs.unlink(pth);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** หา path ไฟล์ชั่วคราว — ใช้ Map ก่อน แล้วค่อยดูบนดิสก์ (กัน nodemon restart / process ใหม่) */
+function resolveFreshieTempFilePath(token) {
+  const rec = freshieTempFiles.get(token);
+  if (rec?.path && fssync.existsSync(rec.path)) return rec.path;
+  const disk = path.join(os.tmpdir(), `ubu-freshie-${token}.jpg`);
+  if (fssync.existsSync(disk)) return disk;
+  return null;
+}
+
+function freshiePublicTempUrl(req, token) {
+  const host = (req.get('x-forwarded-host') || req.get('host') || `127.0.0.1:${PORT}`).split(',')[0].trim();
+  let proto = (req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+  if (proto.includes(',')) proto = proto.split(',')[0].trim();
+  return `${proto}://${host}/api/public/freshie-frame/temp/${token}`;
+}
+
+const FRESHIE_ANIME_RETRY_USER_MESSAGE =
+  'ระบบ AI ยังไม่ส่งรูปกลับมา — กรุณากด Generate 3D อีกครั้ง (หรือเปลี่ยนรูปแล้วลองใหม่)';
+
+let freshieFrameStatsCache = { total: 0, updatedAt: null };
+
+async function getFreshieFrameSuccessCount() {
+  try {
+    const client = await pool.connect();
+    try {
+      const r = await client.query(
+        `SELECT total_success, updated_at FROM freshie_frame_stats WHERE id = 1`
+      );
+      const row = r.rows[0];
+      const total = Number(row?.total_success || 0);
+      freshieFrameStatsCache = { total, updatedAt: row?.updated_at || null };
+      return freshieFrameStatsCache;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.warn('freshie stats read:', e?.message || e);
+    return freshieFrameStatsCache;
+  }
+}
+
+async function incrementFreshieFrameSuccess(source = 'unknown') {
+  try {
+    const client = await pool.connect();
+    try {
+      const r = await client.query(
+        `UPDATE freshie_frame_stats
+         SET total_success = total_success + 1,
+             updated_at = timezone('Asia/Bangkok', now())
+         WHERE id = 1
+         RETURNING total_success, updated_at`,
+        []
+      );
+      const row = r.rows[0];
+      const total = Number(row?.total_success || 0);
+      freshieFrameStatsCache = { total, updatedAt: row?.updated_at || null };
+      console.log(`📈 freshie frame success +1 (${source}) → ${total}`);
+      return total;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.warn('freshie stats increment:', e?.message || e);
+    freshieFrameStatsCache = {
+      total: Number(freshieFrameStatsCache.total || 0) + 1,
+      updatedAt: new Date().toISOString()
+    };
+    return freshieFrameStatsCache.total;
+  }
+}
+
+/** ข้อความสำหรับผู้ใช้ทั่วไป — ไม่ส่ง log/JSON จาก provider */
+function humanizeFreshieAnimeError(rawMessage, errorCode) {
+  const code = String(errorCode || '').toLowerCase();
+  const m = String(rawMessage || '').trim();
+  const blob = `${code} ${m}`.toLowerCase();
+
+  if (
+    code.includes('no_image') ||
+    code.includes('no_images') ||
+    blob.includes('did not return images') ||
+    blob.includes('ai_gateway_no_images') ||
+    blob.includes('gemini ตอบว่าง') ||
+    blob.includes('"content":null') ||
+    blob.includes('chat.completion') ||
+    blob.includes('gen-') ||
+    blob.includes('finish_reason')
+  ) {
+    return FRESHIE_ANIME_RETRY_USER_MESSAGE;
+  }
+  if (blob.includes('missing bearer') || blob.includes('missing_bearer')) {
+    return 'การเชื่อมต่อ AI ไม่สมบูรณ์ — ติดต่อผู้ดูแลระบบ';
+  }
+  if (blob.includes('timeout') || code.includes('timeout')) {
+    return 'ใช้เวลานานเกินไป — กรุณากด Generate 3D อีกครั้ง';
+  }
+  if (blob.includes('payload_too_large') || blob.includes('413')) {
+    return 'รูปใหญ่เกินไป — ลองรูปเล็กลงแล้วกด Generate 3D อีกครั้ง';
+  }
+  if (m.startsWith('{') || m.startsWith('[') || m.length > 140) {
+    return FRESHIE_ANIME_RETRY_USER_MESSAGE;
+  }
+  return m || FRESHIE_ANIME_RETRY_USER_MESSAGE;
+}
+
+async function freshieResolveImageFromN8n(req, data, fallbackBuffer) {
+  let imageUrl = extractN8nImageUrl(data);
+  const b64FromN8n = extractN8nImageBase64(data);
+  if (!imageUrl && b64FromN8n) {
+    try {
+      const buf = Buffer.from(stripDataUrlBase64(b64FromN8n), 'base64');
+      if (buf.length > 0 && buf.length <= 12 * 1024 * 1024) {
+        const token = await registerFreshieTempJpeg(buf);
+        imageUrl = freshiePublicTempUrl(req, token);
+      }
+    } catch (e) {
+      console.error('freshie n8n base64 to temp:', e);
+    }
+  }
+  if (!imageUrl && fallbackBuffer && fallbackBuffer.length > 0) {
+    const token = await registerFreshieTempJpeg(fallbackBuffer);
+    imageUrl = freshiePublicTempUrl(req, token);
+  }
+  return imageUrl || null;
+}
+
+const FRESHIE_ANIME_N8N_MAX_BYTES = Number(process.env.FRESHIE_ANIME_N8N_MAX_BYTES || 400 * 1024);
+const FRESHIE_ANIME_LONG_EDGE_MAX = Number(process.env.FRESHIE_ANIME_LONG_EDGE_MAX || 768);
+
+async function compressFreshiePhotoForN8n(inputBuffer) {
+  const maxBytes = FRESHIE_ANIME_N8N_MAX_BYTES;
+  let pipeline = sharp(inputBuffer).rotate();
+  const meta = await pipeline.metadata();
+  const long = Math.max(meta.width || 0, meta.height || 0);
+  if (long > FRESHIE_ANIME_LONG_EDGE_MAX) {
+    pipeline = pipeline.resize(FRESHIE_ANIME_LONG_EDGE_MAX, FRESHIE_ANIME_LONG_EDGE_MAX, {
+      fit: 'inside',
+      withoutEnlargement: true
+    });
+  }
+  let last = null;
+  for (const quality of [85, 75, 65, 55, 45]) {
+    last = await pipeline.clone().jpeg({ quality, mozjpeg: true }).toBuffer();
+    if (last.length <= maxBytes) return last;
+  }
+  return last || (await pipeline.jpeg({ quality: 40, mozjpeg: true }).toBuffer());
+}
+
+function validateFreshieUploadFile(body) {
+  const { file = {} } = body || {};
+  const fileName = String(file?.name || '').trim();
+  const mimeType = String(file?.mimeType || 'application/octet-stream').trim();
+  const contentBase64 = String(file?.contentBase64 || '').trim();
+  const fileSize = Number(file?.size || 0);
+  if (!fileName || !contentBase64) {
+    return { error: { status: 400, error: 'file_required', message: 'ต้องส่งรูป (file.contentBase64 และ file.name)' } };
+  }
+  const allowedMime = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+  if (!allowedMime.has(mimeType.toLowerCase())) {
+    return { error: { status: 400, error: 'invalid_mime', message: 'รองรับเฉพาะรูป JPEG, PNG, WebP' } };
+  }
+  const decodedSize = Buffer.from(stripDataUrlBase64(contentBase64), 'base64').length;
+  if (decodedSize <= 0 || decodedSize > 5 * 1024 * 1024) {
+    return { error: { status: 400, error: 'invalid_file_size', message: 'ขนาดรูปต้องไม่เกิน 5MB' } };
+  }
+  const photoBuffer = Buffer.from(stripDataUrlBase64(contentBase64), 'base64');
+  return {
+    fileName,
+    mimeType,
+    contentBase64,
+    fileSize: fileSize || decodedSize,
+    photoBuffer,
+    decodedSize
+  };
+}
+
+app.get('/api/public/freshie-frame/stats', async (req, res) => {
+  try {
+    const stats = await getFreshieFrameSuccessCount();
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({
+      success: true,
+      total: stats.total,
+      updatedAt: stats.updatedAt
+    });
+  } catch (e) {
+    console.error('freshie stats:', e);
+    return res.json({ success: true, total: freshieFrameStatsCache.total, updatedAt: null });
+  }
+});
+
+app.get('/api/public/freshie-frame/temp/:token', async (req, res) => {
+  try {
+    const token = String(req.params.token || '').replace(/[^a-f0-9]/gi, '').slice(0, 64);
+    if (!token) return res.status(400).end();
+    const filePath = resolveFreshieTempFilePath(token);
+    if (!filePath) {
+      return res.status(404).end();
+    }
+    const abs = path.resolve(filePath);
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.sendFile(abs, {}, (err) => {
+      if (err && !res.headersSent) res.status(500).end();
+    });
+  } catch (e) {
+    console.error('freshie temp download:', e);
+    if (!res.headersSent) res.status(500).end();
+  }
+});
+
+app.post('/api/freshie-frame/anime-3d', async (req, res) => {
+  try {
+    const user = await getAuthUser(req);
+    if (!user) {
+      return res.status(401).json({
+        error: 'login_required',
+        message: 'ต้องเข้าสู่ระบบ UBU Portal ก่อนใช้สร้างรูป AI อนิเมะ 3D'
+      });
+    }
+
+    if (!N8N_FRESHIE_ANIME_WEBHOOK_URL) {
+      return res.status(503).json({
+        error: 'freshie_anime_not_configured',
+        message: 'ยังไม่ได้ตั้งค่า N8N_FRESHIE_ANIME_WEBHOOK_URL บนเซิร์ฟเวอร์'
+      });
+    }
+
+    const validated = validateFreshieUploadFile(req.body || {});
+    if (validated.error) {
+      return res.status(validated.error.status).json({
+        error: validated.error.error,
+        message: validated.error.message
+      });
+    }
+
+    const { fileName, fileSize, decodedSize } = validated;
+    const style = String(req.body?.style || '3d_anime').trim() || '3d_anime';
+
+    let photoBuffer = validated.photoBuffer;
+    try {
+      photoBuffer = await compressFreshiePhotoForN8n(photoBuffer);
+    } catch (e) {
+      console.error('freshie anime compress:', e);
+    }
+    const n8nMime = 'image/jpeg';
+    const n8nBase64 = photoBuffer.toString('base64');
+    const n8nName = fileName.replace(/\.[^.]+$/i, '.jpg') || 'photo.jpg';
+
+    const webhookData = {
+      event: 'ubu_freshie_anime_3d',
+      timestamp: new Date().toISOString(),
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role
+      },
+      style,
+      prompt:
+        String(req.body?.prompt || '').trim() ||
+        '3D anime portrait, keep face likeness, soft lighting, single person, no text, no watermark',
+      photo: {
+        name: n8nName,
+        mimeType: n8nMime,
+        size: photoBuffer.length,
+        contentBase64: n8nBase64
+      }
+    };
+
+    const n8nResponse = await axios.post(N8N_FRESHIE_ANIME_WEBHOOK_URL, webhookData, {
+      timeout: FRESHIE_ANIME_TIMEOUT_MS,
+      validateStatus: (s) => s >= 200 && s < 300
+    });
+    const data = normalizeFreshieN8nPayload(n8nResponse?.data ?? {});
+
+    if (data.error || data.message) {
+      const n8nErr =
+        typeof data.message === 'string'
+          ? data.message
+          : typeof data.error === 'string'
+            ? data.error
+            : data.error?.message;
+      if (n8nErr && !extractN8nImageBase64(data) && !extractImageFromChatCompletionPayload(data)) {
+        console.error('freshie anime n8n error payload:', JSON.stringify(data).slice(0, 500));
+        const errCode =
+          typeof data.error === 'string' ? data.error : data.error?.code || 'freshie_anime_n8n_failed';
+        return res.status(502).json({
+          error: 'freshie_anime_retry',
+          message: humanizeFreshieAnimeError(n8nErr, errCode)
+        });
+      }
+    }
+
+    let imageUrl = await freshieResolveImageFromN8n(req, data, null);
+    let b64Direct = extractN8nImageBase64(data);
+    let outMime = String(data.mimeType || data.imageMimeType || 'image/jpeg').trim() || 'image/jpeg';
+
+    const fromChat = extractImageFromChatCompletionPayload(data);
+    if (fromChat) {
+      if (fromChat.imageUrl) imageUrl = fromChat.imageUrl;
+      if (fromChat.imageBase64) b64Direct = fromChat.imageBase64;
+      if (fromChat.mimeType) outMime = fromChat.mimeType;
+    }
+
+    if (!imageUrl && b64Direct) {
+      try {
+        const buf = Buffer.from(stripDataUrlBase64(b64Direct), 'base64');
+        if (buf.length > 0 && buf.length <= 12 * 1024 * 1024) {
+          const token = await registerFreshieTempJpeg(buf);
+          imageUrl = freshiePublicTempUrl(req, token);
+        }
+      } catch (e) {
+        console.error('freshie anime b64 to temp:', e);
+      }
+    }
+
+    if (!imageUrl && !b64Direct) {
+      console.error('freshie anime n8n no image:', JSON.stringify(data).slice(0, 500));
+      return res.status(502).json({
+        error: 'freshie_anime_retry',
+        message: FRESHIE_ANIME_RETRY_USER_MESSAGE
+      });
+    }
+
+    const out = { success: true, style };
+    if (imageUrl) out.imageUrl = imageUrl;
+    if (b64Direct) {
+      out.imageBase64 = stripDataUrlBase64(b64Direct);
+      out.mimeType = outMime;
+    }
+    const newTotal = await incrementFreshieFrameSuccess('anime_3d');
+    out.statsTotal = newTotal;
+    return res.json(out);
+  } catch (error) {
+    console.error('Error freshie-frame anime-3d:', error);
+    if (error?.code === 'ECONNABORTED') {
+      return res.status(504).json({
+        error: 'n8n_timeout',
+        message: `แปลงรูปอนิเมะใช้เวลานานเกิน ${FRESHIE_ANIME_TIMEOUT_MS}ms`
+      });
+    }
+    const status = Number(error?.response?.status || 0);
+    if (status === 413) {
+      return res.status(413).json({
+        error: 'payload_too_large',
+        message:
+          'รูปยังใหญ่เกินที่ n8n/nginx รับได้ (413) — ลองรูปเล็กลง หรือให้ผู้ดูแลเพิ่ม client_max_body_size ที่ nginx ของ n8n'
+      });
+    }
+    const rawMsg = error?.response?.data?.message || error?.message || '';
+    return res.status(500).json({
+      error: 'freshie_anime_failed',
+      message: humanizeFreshieAnimeError(rawMsg, error?.response?.data?.error)
+    });
+  }
+});
+
+app.post('/api/public/freshie-frame/generate', async (req, res) => {
+  try {
+    if (!N8N_FRESHIE_FRAME_WEBHOOK_URL) {
+      return res.status(503).json({
+        error: 'freshie_frame_not_configured',
+        message: 'ยังไม่ได้ตั้งค่า N8N_FRESHIE_FRAME_WEBHOOK_URL บนเซิร์ฟเวอร์'
+      });
+    }
+
+    const body = req.body || {};
+    const themeId = String(body.themeId ?? '').trim();
+    const allowedThemes = new Set([
+      '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '69-text1'
+    ]);
+    if (!allowedThemes.has(themeId)) {
+      return res.status(400).json({
+        error: 'invalid_theme',
+        message: 'themeId ไม่ถูกต้อง'
+      });
+    }
+
+    const clientComposed = Boolean(body.clientComposed);
+    if (clientComposed && !FRESHIE_TEXT_THEME_IDS.has(themeId)) {
+      return res.status(400).json({
+        error: 'invalid_client_composed',
+        message: 'clientComposed ใช้ได้เฉพาะธีม TEXT'
+      });
+    }
+
+    const validated = validateFreshieUploadFile(body);
+    if (validated.error) {
+      return res.status(validated.error.status).json({
+        error: validated.error.error,
+        message: validated.error.message
+      });
+    }
+    const { fileName, mimeType, contentBase64, fileSize, photoBuffer, decodedSize } = validated;
+    let composedJpeg;
+    try {
+      composedJpeg = clientComposed
+        ? await sharp(photoBuffer).rotate().jpeg({ quality: 90 }).toBuffer()
+        : await composeFreshieFrameJpeg(themeId, photoBuffer);
+    } catch (e) {
+      console.error('freshie-frame compose:', e);
+      return res.status(500).json({
+        error: 'freshie_frame_compose_failed',
+        message: e?.message || 'ประกอบเฟรมบนเซิร์ฟเวอร์ไม่สำเร็จ'
+      });
+    }
+
+    /* ธีม TEXT ประกอบครบแล้ว (clientComposed) — ส่ง URL ชั่วคราวโดยตรง
+       (workflow n8n เก่าบางตัว validate themeId แค่ 1–12 จึงไม่ต้องเรียก webhook) */
+    if (clientComposed && FRESHIE_TEXT_THEME_IDS.has(themeId)) {
+      const token = await registerFreshieTempJpeg(composedJpeg);
+      const imageUrl = freshiePublicTempUrl(req, token);
+      const newTotal = await incrementFreshieFrameSuccess('create_frame');
+      return res.json({
+        success: true,
+        imageUrl,
+        themeId,
+        statsTotal: newTotal
+      });
+    }
+
+    const webhookData = {
+      event: 'ubu_freshie_frame_generate',
+      timestamp: new Date().toISOString(),
+      themeId,
+      photo: {
+        name: fileName,
+        mimeType,
+        size: fileSize || decodedSize,
+        contentBase64
+      },
+      composedMimeType: 'image/jpeg',
+      composedSize: composedJpeg.length,
+      composedImageBase64: composedJpeg.toString('base64')
+    };
+
+    const n8nResponse = await axios.post(
+      N8N_FRESHIE_FRAME_WEBHOOK_URL,
+      webhookData,
+      { timeout: N8N_WEBHOOK_TIMEOUT_MS }
+    );
+    const raw = n8nResponse?.data ?? {};
+    const data = Array.isArray(raw) ? (raw[0] ?? {}) : raw;
+
+    let imageUrl = await freshieResolveImageFromN8n(req, data, null);
+    if (!imageUrl) {
+      imageUrl = await freshieResolveImageFromN8n(req, {}, composedJpeg);
+    }
+
+    const newTotal = await incrementFreshieFrameSuccess('create_frame');
+    return res.json({
+      success: true,
+      imageUrl,
+      themeId,
+      statsTotal: newTotal
+    });
+  } catch (error) {
+    console.error('Error freshie-frame n8n webhook:', error);
+    const status = Number(error?.response?.status || 0);
+    if (error?.code === 'ECONNABORTED') {
+      return res.status(504).json({
+        error: 'n8n_timeout',
+        message: `n8n ใช้เวลานานเกิน ${N8N_WEBHOOK_TIMEOUT_MS}ms หรือยังไม่ตอบกลับ`
+      });
+    }
+    if (status === 413) {
+      return res.status(413).json({
+        error: 'payload_too_large',
+        message: 'รูปมีขนาดใหญ่เกินที่ n8n/nginx รับได้ (413)'
+      });
+    }
+    return res.status(500).json({
+      error: 'freshie_frame_failed',
+      message: error?.response?.data?.message || error?.message || 'Unknown error'
+    });
   }
 });
 
@@ -5825,6 +7189,189 @@ app.patch('/api/admin/settings', async (req, res) => {
   }
 });
 
+// Admin: Inspect n8n webhook queue (persistent jobs)
+app.get('/api/admin/n8n-webhook-queue', async (req, res) => {
+  const cookies = parseCookies(req);
+  const session = verify(cookies.session);
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const status = String(req.query?.status || '').trim().toLowerCase();
+  const limit = Math.max(1, Math.min(200, Number(req.query?.limit || 50)));
+  const offset = Math.max(0, Number(req.query?.offset || 0));
+  const allowedStatus = new Set(['pending', 'retry', 'processing', 'sent', 'failed']);
+
+  const client = await pool.connect();
+  try {
+    const summaryResult = await client.query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0)::int AS pending,
+        COALESCE(SUM(CASE WHEN status = 'retry' THEN 1 ELSE 0 END), 0)::int AS retry,
+        COALESCE(SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END), 0)::int AS processing,
+        COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0)::int AS failed,
+        COALESCE(SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END), 0)::int AS sent
+      FROM n8n_webhook_jobs
+    `);
+
+    const whereClause = (status && allowedStatus.has(status)) ? 'WHERE status = $1' : '';
+    const whereParams = (status && allowedStatus.has(status)) ? [status] : [];
+    const params = [...whereParams, limit, offset];
+    const statusParamCount = whereParams.length;
+
+    const jobsResult = await client.query(`
+      SELECT id, label, status, attempts, max_attempts, url, next_attempt_at, last_attempt_at, sent_at, last_error, result_message, created_at, updated_at
+      FROM n8n_webhook_jobs
+      ${whereClause}
+      ORDER BY
+        CASE WHEN status = 'failed' THEN 0 WHEN status = 'retry' THEN 1 WHEN status = 'pending' THEN 2 ELSE 3 END,
+        created_at DESC
+      LIMIT $${statusParamCount + 1} OFFSET $${statusParamCount + 2}
+    `, params);
+
+    res.json({
+      summary: summaryResult.rows[0] || { total: 0, pending: 0, retry: 0, processing: 0, failed: 0, sent: 0 },
+      jobs: jobsResult.rows || [],
+      paging: { status: (status && allowedStatus.has(status)) ? status : null, limit, offset }
+    });
+  } catch (e) {
+    console.error('❌ Error fetching n8n webhook queue:', e);
+    res.status(500).json({ error: 'Failed to fetch n8n webhook queue' });
+  } finally {
+    client.release();
+  }
+});
+
+// Admin: Requeue failed n8n webhook jobs
+app.post('/api/admin/n8n-webhook-queue/requeue-failed', async (req, res) => {
+  const cookies = parseCookies(req);
+  const session = verify(cookies.session);
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map(v => Number(v)).filter(v => Number.isFinite(v) && v > 0)
+    : [];
+
+  const client = await pool.connect();
+  try {
+    let result;
+    if (ids.length > 0) {
+      result = await client.query(`
+        UPDATE n8n_webhook_jobs
+      SET status = 'retry',
+            attempts = 0,
+            next_attempt_at = timezone('Asia/Bangkok', now()),
+            last_error = NULL,
+          result_message = NULL,
+            updated_at = timezone('Asia/Bangkok', now())
+        WHERE status = 'failed'
+          AND id = ANY($1::bigint[])
+        RETURNING id
+      `, [ids]);
+    } else {
+      result = await client.query(`
+        UPDATE n8n_webhook_jobs
+      SET status = 'retry',
+            attempts = 0,
+            next_attempt_at = timezone('Asia/Bangkok', now()),
+            last_error = NULL,
+          result_message = NULL,
+            updated_at = timezone('Asia/Bangkok', now())
+        WHERE status = 'failed'
+        RETURNING id
+      `);
+    }
+
+    res.json({ success: true, requeued: result.rowCount || 0, ids: (result.rows || []).map(r => r.id) });
+  } catch (e) {
+    console.error('❌ Error requeueing failed n8n webhook jobs:', e);
+    res.status(500).json({ error: 'Failed to requeue failed jobs' });
+  } finally {
+    client.release();
+  }
+});
+
+// Admin: Delete failed n8n webhook jobs
+app.post('/api/admin/n8n-webhook-queue/delete-failed', async (req, res) => {
+  const cookies = parseCookies(req);
+  const session = verify(cookies.session);
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map(v => Number(v)).filter(v => Number.isFinite(v) && v > 0)
+    : [];
+
+  const client = await pool.connect();
+  try {
+    let result;
+    if (ids.length > 0) {
+      result = await client.query(`
+        DELETE FROM n8n_webhook_jobs
+        WHERE status = 'failed'
+          AND id = ANY($1::bigint[])
+        RETURNING id
+      `, [ids]);
+    } else {
+      result = await client.query(`
+        DELETE FROM n8n_webhook_jobs
+        WHERE status = 'failed'
+        RETURNING id
+      `);
+    }
+
+    res.json({ success: true, deleted: result.rowCount || 0, ids: (result.rows || []).map(r => r.id) });
+  } catch (e) {
+    console.error('❌ Error deleting failed n8n webhook jobs:', e);
+    res.status(500).json({ error: 'Failed to delete failed jobs' });
+  } finally {
+    client.release();
+  }
+});
+
+// Admin: Delete sent n8n webhook jobs
+app.post('/api/admin/n8n-webhook-queue/delete-sent', async (req, res) => {
+  const cookies = parseCookies(req);
+  const session = verify(cookies.session);
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map(v => Number(v)).filter(v => Number.isFinite(v) && v > 0)
+    : [];
+
+  const client = await pool.connect();
+  try {
+    let result;
+    if (ids.length > 0) {
+      result = await client.query(`
+        DELETE FROM n8n_webhook_jobs
+        WHERE status = 'sent'
+          AND id = ANY($1::bigint[])
+        RETURNING id
+      `, [ids]);
+    } else {
+      result = await client.query(`
+        DELETE FROM n8n_webhook_jobs
+        WHERE status = 'sent'
+        RETURNING id
+      `);
+    }
+
+    res.json({ success: true, deleted: result.rowCount || 0, ids: (result.rows || []).map(r => r.id) });
+  } catch (e) {
+    console.error('❌ Error deleting sent n8n webhook jobs:', e);
+    res.status(500).json({ error: 'Failed to delete sent jobs' });
+  } finally {
+    client.release();
+  }
+});
+
 // Admin: Auto-disable inactive API keys
 app.post('/api/admin/auto-disable-inactive', async (req, res) => {
   const cookies = parseCookies(req);
@@ -5957,6 +7504,93 @@ app.get('/api/admin/openrouter/status', async (req, res) => {
     return res.json({ ok: true, keysVisible: list.length, hasToken: Boolean(OPENROUTER_TOKEN) });
   } catch (e) {
     return res.status(500).json({ ok: false });
+  }
+});
+
+// Admin: Get OpenRouter account balance/credits (เหลือเงินเท่าไหร่)
+app.get('/api/admin/openrouter/credits', async (req, res) => {
+  const cookies = parseCookies(req);
+  const session = verify(cookies.session);
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  if (!OPENROUTER_TOKEN) {
+    return res.json({ balance: null, configured: false, error: 'OPENROUTER_TOKEN not configured' });
+  }
+  const headers = {
+    Authorization: `Bearer ${OPENROUTER_TOKEN}`,
+    'HTTP-Referer': process.env.PUBLIC_ORIGIN || 'http://localhost:3000',
+    'X-Title': 'UBU AI SERVICE'
+  };
+
+  function toNum(v) {
+    if (typeof v === 'number' && !Number.isNaN(v)) return v;
+    if (typeof v === 'string') { const n = parseFloat(v); if (!Number.isNaN(n)) return n; }
+    return null;
+  }
+  function parseBalance(data) {
+    if (!data || typeof data !== 'object') return null;
+    const top = toNum(data.balance) ?? toNum(data.credits_remaining) ?? toNum(data.limit_remaining) ?? toNum(data.remaining) ?? toNum(data.available);
+    if (top != null) return top;
+    const d = data.data && typeof data.data === 'object' ? data.data : data;
+    const inner = toNum(d.balance) ?? toNum(d.credits_remaining) ?? toNum(d.limit_remaining) ?? toNum(d.remaining) ?? toNum(d.available);
+    if (inner != null) return inner;
+    // OpenRouter: data.total_credits - data.total_usage = ยอดคงเหลือ
+    const totalCredits = toNum(d.total_credits);
+    const totalUsage = toNum(d.total_usage);
+    if (totalCredits != null && totalUsage != null) return Math.max(0, totalCredits - totalUsage);
+    const purchased = toNum(d.credits_purchased ?? d.purchased);
+    const used = toNum(d.credits_used ?? d.used);
+    if (purchased != null && used != null) return Math.max(0, purchased - used);
+    return null;
+  }
+
+  try {
+    let balance = null;
+    let errorMsg = '';
+
+    // 1) Try GET /api/v1/credits (may require provisioning key)
+    try {
+      const response = await axios.get('https://openrouter.ai/api/v1/credits', { headers, timeout: 10000 });
+      const data = response.data || {};
+      balance = parseBalance(data);
+      if (balance != null) {
+        return res.json({ balance, configured: true });
+      }
+      errorMsg = 'Credits API คืนข้อมูลแต่ไม่มีฟิลด์ยอดคงเหลือ';
+      if (Object.keys(data).length) console.log('OpenRouter /api/v1/credits response (balance not parsed):', JSON.stringify(data));
+    } catch (creditsErr) {
+      const status = creditsErr.response?.status;
+      errorMsg = status === 401 ? 'Credits API ต้องใช้ provisioning key' : (creditsErr.response?.data?.error || creditsErr.message || '');
+    }
+
+    // 2) Fallback: GET /api/v1/auth/key returns limit_remaining for the key
+    try {
+      const keyRes = await axios.get('https://openrouter.ai/api/v1/auth/key', { headers, timeout: 10000 });
+      const keyData = keyRes.data || {};
+      const limitRemaining = toNum(keyData.limit_remaining) ?? toNum(keyData.remaining);
+      if (limitRemaining != null) {
+        return res.json({ balance: limitRemaining, configured: true, source: 'key' });
+      }
+      if (!errorMsg) errorMsg = 'Auth/key API คืนข้อมูลแต่ไม่มี limit_remaining';
+    } catch (keyErr) {
+      if (!errorMsg) errorMsg = keyErr.response?.data?.error || keyErr.message || '';
+    }
+
+    return res.json({
+      balance: null,
+      configured: true,
+      error: errorMsg || 'ไม่พบยอดคงเหลือจาก OpenRouter'
+    });
+  } catch (e) {
+    const status = e.response?.status;
+    const msg = e.response?.data?.error || e.response?.data?.message || e.message;
+    console.error('OpenRouter credits API error:', status, msg);
+    return res.json({
+      balance: null,
+      configured: true,
+      error: status === 401 ? 'Unauthorized (ใช้ provisioning key ที่ OpenRouter)' : (msg || 'โหลดยอดไม่สำเร็จ')
+    });
   }
 });
 
@@ -6144,16 +7778,201 @@ if (enableV1) {
         }
         console.log(`   🔄 Normalized model field: ${requestBody.model}`);
       }
-      
-      const { data } = await axios.post(targetUrl, requestBody, {
-        headers: {
-          Authorization: `Bearer ${useKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.PUBLIC_ORIGIN || 'https://aigateway.ubu.ac.th/',
-          'X-Title': 'UBU AI SERVICE'
-        },
-        timeout: 30000
-      });
+
+      // Responses API with stream: true — forward SSE stream and parse usage from response.done
+      if (targetUrl.includes('/responses') && requestBody.stream === true) {
+        let streamResponse;
+        try {
+          streamResponse = await axios({
+            method: 'POST',
+            url: targetUrl,
+            data: requestBody,
+            responseType: 'stream',
+            headers: {
+              Authorization: `Bearer ${useKey}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': process.env.PUBLIC_ORIGIN || 'https://aigateway.ubu.ac.th/',
+              'X-Title': 'UBU AI SERVICE'
+            },
+            timeout: 120000,
+            validateStatus: () => true
+          });
+        } catch (streamReqErr) {
+          const st = streamReqErr?.response?.status || 500;
+          const safeDetails = (streamReqErr?.response?.data && typeof streamReqErr.response.data === 'object' && !streamReqErr.response.data.pipe)
+            ? { error: streamReqErr.response.data?.error, message: streamReqErr.response.data?.message }
+            : { message: streamReqErr?.message };
+          if (!res.headersSent) {
+            return res.status(st).json({ error: 'provider_error', message: streamReqErr?.message || 'Stream request failed', details: safeDetails });
+          }
+          return;
+        }
+        if (streamResponse.status < 200 || streamResponse.status >= 300) {
+          const chunks = [];
+          await new Promise((resolve, reject) => {
+            streamResponse.data.on('data', (c) => chunks.push(c));
+            streamResponse.data.on('end', resolve);
+            streamResponse.data.on('error', reject);
+          });
+          const body = Buffer.concat(chunks).toString('utf8');
+          let errBody = {};
+          try { errBody = JSON.parse(body); } catch (_) { errBody = { message: body || streamResponse.statusText }; }
+          const safeDetails = errBody?.error ? { error: errBody.error } : { message: errBody?.message || streamResponse.statusText };
+          if (!res.headersSent) {
+            return res.status(streamResponse.status).json({ error: 'provider_error', message: errBody?.error?.message || errBody?.message || streamResponse.statusText, details: safeDetails });
+          }
+          return;
+        }
+        res.setHeader('Content-Type', streamResponse.headers['content-type'] || 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.status(200);
+        let usageFromStream = null;
+        let lineBuffer = '';
+        const stream = streamResponse.data;
+
+        function tryParseUsageFromPayload(payload) {
+          if (!payload || payload === '[DONE]') return;
+          try {
+            const obj = JSON.parse(payload);
+            if (obj.type === 'response.done' && obj.response && obj.response.usage) {
+              return obj.response.usage;
+            }
+            if (obj.usage && (obj.usage.input_tokens != null || obj.usage.output_tokens != null || obj.usage.prompt_tokens != null)) {
+              return obj.usage;
+            }
+          } catch (_) {}
+          return null;
+        }
+
+        stream.on('data', (chunk) => {
+          const str = chunk.toString();
+          lineBuffer += str;
+          const lines = lineBuffer.split(/\r?\n/);
+          lineBuffer = lines.pop() || '';
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const payload = line.slice(6).trim();
+              const u = tryParseUsageFromPayload(payload);
+              if (u) usageFromStream = u;
+            }
+          }
+          res.write(chunk);
+        });
+        stream.on('end', async () => {
+          // Flush remaining buffer — may contain last event (no trailing newline) or "data: ...\ndata: [DONE]"
+          const remaining = lineBuffer.trim();
+          if (remaining) {
+            const parts = remaining.split(/\r?\n/);
+            for (const line of parts) {
+              if (line.startsWith('data: ')) {
+                const payload = line.slice(6).trim();
+                const u = tryParseUsageFromPayload(payload);
+                if (u) usageFromStream = u;
+              }
+            }
+            // Single line without newline (last event only)
+            if (remaining.startsWith('data: ') && !remaining.includes('\n')) {
+              const u = tryParseUsageFromPayload(remaining.slice(6).trim());
+              if (u) usageFromStream = u;
+            }
+          }
+          if (token.startsWith('ubu_') && keyId && userId && usageFromStream) {
+            const usage = usageFromStream;
+            const tokensIn = Number(usage?.prompt_tokens ?? usage?.input_tokens ?? 0);
+            const tokensOut = Number(usage?.completion_tokens ?? usage?.output_tokens ?? 0);
+            const modelId = requestBody.model || 'unknown';
+            let cost = Number(usage?.total_cost ?? usage?.cost ?? 0);
+            if (!Number.isFinite(cost) || cost === 0) {
+              let pricing = await getModelPricingPerM(modelId);
+              if (!pricing && modelsCache.ts && (Date.now() - modelsCache.ts) < MODELS_CACHE_MS) {
+                pricing = await getModelPricingPerM(modelId, true);
+              }
+              if (pricing && Number.isFinite(pricing.inM) && Number.isFinite(pricing.outM)) {
+                cost = (tokensIn / 1_000_000) * pricing.inM + (tokensOut / 1_000_000) * pricing.outM;
+              } else {
+                const mname = String(modelId).toLowerCase();
+                const table = [
+                  { match: 'gpt-4o', inM: 5, outM: 15 }, { match: 'gpt-4o-mini', inM: 0.5, outM: 1.5 },
+                  { match: 'claude-3-haiku', inM: 0.25, outM: 1.25 }, { match: 'claude-3.5-sonnet', inM: 3, outM: 15 },
+                  { match: 'gemini-2.5', inM: 0.125, outM: 0.5 }
+                ];
+                for (const t of table) {
+                  if (mname.includes(t.match)) {
+                    cost = (tokensIn / 1_000_000) * t.inM + (tokensOut / 1_000_000) * t.outM;
+                    break;
+                  }
+                }
+                if (cost === 0 && (tokensIn + tokensOut) > 0) {
+                  cost = ((tokensIn + tokensOut) / 1_000_000) * 1.0;
+                }
+              }
+            }
+            try {
+              const client2 = await pool.connect();
+              try {
+                await client2.query(`
+                  INSERT INTO api_usage_logs (api_key_id, user_id, provider, action, model, tokens_input, tokens_output, cost_usd, status_code, response_time_ms)
+                  VALUES ($1, $2, 'openrouter', 'responses', $3, $4, $5, $6, 200, 0)
+                `, [keyId, userId, modelId, tokensIn, tokensOut, cost]);
+                await client2.query('UPDATE api_keys SET last_used_at = timezone(\'Asia/Bangkok\', now()), current_spend = COALESCE(current_spend, 0) + $2 WHERE id = $1', [keyId, cost]);
+                console.log(`   📊 Logged usage (responses stream): ${tokensIn + tokensOut} tokens, $${cost.toFixed(6)}`);
+              } finally {
+                client2.release();
+              }
+            } catch (e) {
+              console.warn('   ⚠️ Usage logging failed (stream):', e?.message || e);
+            }
+          } else if (token.startsWith('ubu_') && keyId && !usageFromStream) {
+            console.warn('   ⚠️ No usage in stream (response.done not seen or empty) — not logging');
+            if (lineBuffer.length > 0 && lineBuffer.length < 2000) {
+              console.warn('   🔍 Last buffer sample:', lineBuffer.slice(-800));
+            }
+          }
+          res.end();
+        });
+        stream.on('error', (err) => {
+          console.error('   ❌ Responses stream error:', err?.message);
+          if (!res.headersSent) res.status(500).json({ error: 'stream_error', message: err?.message });
+          else try { res.end(); } catch (_) {}
+        });
+        return;
+      }
+
+      const isImageGen =
+        Array.isArray(requestBody.modalities) && requestBody.modalities.includes('image');
+      const requestTimeout = isImageGen ? 120000 : 30000;
+
+      let data = null;
+      const maxAttempts = isImageGen ? 3 : 1;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const resp = await axios.post(targetUrl, requestBody, {
+          headers: {
+            Authorization: `Bearer ${useKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.PUBLIC_ORIGIN || 'https://aigateway.ubu.ac.th/',
+            'X-Title': 'UBU AI SERVICE'
+          },
+          timeout: requestTimeout
+        });
+        data = resp.data;
+        if (!isImageGen || openRouterChatHasImages(data)) {
+          if (isImageGen && attempt > 1) {
+            console.log(`   ✅ Image generation succeeded on attempt ${attempt}`);
+          }
+          break;
+        }
+        console.warn(
+          `   ⚠️ Image model returned empty message (attempt ${attempt}/${maxAttempts}), model=${requestBody.model}`
+        );
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      }
+      if (isImageGen) {
+        data = normalizeOpenRouterImageCompletion(data);
+      }
       
       // Log usage if this was a gateway key
       if (token.startsWith('ubu_') && keyId && userId) {
@@ -6164,6 +7983,8 @@ if (enableV1) {
             action = 'embeddings';
           } else if (targetUrl.includes('/images')) {
             action = 'images.generations';
+          } else if (targetUrl.includes('/responses')) {
+            action = 'responses';
           }
           
           const usage = data?.usage || {};
@@ -6283,9 +8104,12 @@ if (enableV1) {
       return res.json(data);
     } catch (e) {
       const status = e?.response?.status || 500;
-      const errorData = e?.response?.data || {};
+      const rawData = e?.response?.data;
+      const errorData = (rawData && typeof rawData === 'object' && !rawData.pipe && typeof rawData.pipe !== 'function')
+        ? { error: rawData?.error, message: rawData?.message, code: rawData?.error?.code || rawData?.code }
+        : { message: rawData?.message || e?.message };
       const errorMessage = errorData?.error?.message || errorData?.message || e?.message || 'Unknown error';
-      
+
       // Log detailed error for debugging
       console.error(`   ❌ OpenRouter API error (${status}):`, {
         message: errorMessage,
@@ -6470,6 +8294,25 @@ if (enableV1) {
       if (!res.headersSent) {
         return res.status(500).json({ 
           error: 'internal_server_error', 
+          message: 'An unexpected error occurred. Please try again.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    }
+  });
+
+  // POST /api/v1/responses - OpenAI Responses API (n8n / Langchain agents)
+  app.post('/api/v1/responses', async (req, res) => {
+    try {
+      console.log('📥 POST /api/v1/responses - Request received');
+      console.log('   Auth header:', req.headers.authorization ? 'Present' : 'Missing');
+      console.log('   Body:', JSON.stringify(req.body || {}).substring(0, 200));
+      return await forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/responses');
+    } catch (error) {
+      console.error('❌ Unexpected error in /api/v1/responses:', error);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          error: 'internal_server_error',
           message: 'An unexpected error occurred. Please try again.',
           details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
@@ -6931,7 +8774,26 @@ if (enableV1) {
   // GET /v1/models - Alternative path for n8n when Base URL is set to /ai_gateway_api
   app.get('/v1/models', handleModelsEndpoint);
 
+  // POST /v1/responses - Alternative path for n8n (when base URL omits /api)
+  app.post('/v1/responses', async (req, res) => {
+    try {
+      console.log('📥 POST /v1/responses - Request received');
+      return await forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/responses');
+    } catch (error) {
+      console.error('❌ Unexpected error in /v1/responses:', error);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          error: 'internal_server_error',
+          message: 'An unexpected error occurred. Please try again.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    }
+  });
+
   console.log('   📍 POST /api/v1/chat/completions');
+  console.log('   📍 POST /api/v1/responses');
+  console.log('   📍 POST /v1/responses (n8n compatibility)');
   console.log('   📍 POST /api/v1/images/generations');
   console.log('   📍 POST /api/v1/embeddings');
   console.log('   📍 GET /api/v1/embeddings (info endpoint)');
@@ -6944,6 +8806,7 @@ if (enableV1) {
 
 app.listen(PORT, async () => {
   await ensureSchema().catch(err => console.error('Schema ensure failed:', err));
+  await startN8nWebhookWorker().catch(err => console.error('n8n webhook worker start failed:', err));
   // Initial cleanup and schedule daily cleanup of stale pending requests
   try { await cleanupOldPendingRequests(); } catch (e) { console.warn('Initial cleanup failed:', e?.message || e); }
   setInterval(() => {
@@ -7015,6 +8878,7 @@ app.listen(PORT, async () => {
   console.log('');
   console.log('🤖 AI Gateway (OpenAI Compatible):');
   console.log(`   💬 Chat: http://localhost:${PORT}/api/v1/chat/completions`);
+  console.log(`   📨 Responses: http://localhost:${PORT}/api/v1/responses`);
   console.log(`   🖼️  Images: http://localhost:${PORT}/api/v1/images/generations`);
   console.log(`   📝 Embeddings: http://localhost:${PORT}/api/v1/embeddings`);
   console.log(`   📋 Models: http://localhost:${PORT}/api/v1/models`);

@@ -16,6 +16,7 @@ type LazyComponent<T> = DefineComponent<HydrationStrategies, {}, {}, {}, {}, {},
 interface _GlobalComponents {
   'AnimatedBackground': typeof import("../../components/AnimatedBackground.vue")['default']
   'Chatbot': typeof import("../../components/Chatbot.vue")['default']
+  'DocAutomateIntegrationGuide': typeof import("../../components/DocAutomateIntegrationGuide.vue")['default']
   'NuxtWelcome': typeof import("../../node_modules/nuxt/dist/app/components/welcome.vue")['default']
   'NuxtLayout': typeof import("../../node_modules/nuxt/dist/app/components/nuxt-layout")['default']
   'NuxtErrorBoundary': typeof import("../../node_modules/nuxt/dist/app/components/nuxt-error-boundary.vue")['default']
@@ -41,6 +42,7 @@ interface _GlobalComponents {
   'NuxtIsland': typeof import("../../node_modules/nuxt/dist/app/components/nuxt-island")['default']
   'LazyAnimatedBackground': LazyComponent<typeof import("../../components/AnimatedBackground.vue")['default']>
   'LazyChatbot': LazyComponent<typeof import("../../components/Chatbot.vue")['default']>
+  'LazyDocAutomateIntegrationGuide': LazyComponent<typeof import("../../components/DocAutomateIntegrationGuide.vue")['default']>
   'LazyNuxtWelcome': LazyComponent<typeof import("../../node_modules/nuxt/dist/app/components/welcome.vue")['default']>
   'LazyNuxtLayout': LazyComponent<typeof import("../../node_modules/nuxt/dist/app/components/nuxt-layout")['default']>
   'LazyNuxtErrorBoundary': LazyComponent<typeof import("../../node_modules/nuxt/dist/app/components/nuxt-error-boundary.vue")['default']>

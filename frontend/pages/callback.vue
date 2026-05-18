@@ -142,8 +142,17 @@ onMounted(async () => {
         
         // Force refresh user data in app.vue by triggering a custom event
         window.dispatchEvent(new CustomEvent('user-login-success'));
-        
-        await navigateTo('/')
+
+        const stateReturn = url.searchParams.get('state')
+        const returnTo =
+          (stateReturn && stateReturn.startsWith('/') ? stateReturn : null) ||
+          sessionStorage.getItem('ff_return_after_login')
+        if (returnTo) {
+          sessionStorage.removeItem('ff_return_after_login')
+          await navigateTo(returnTo)
+        } else {
+          await navigateTo('/')
+        }
     } catch (err: any) {
         error.value = err?.data?.message || err?.message || 'ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง';
         status.value = 'error';

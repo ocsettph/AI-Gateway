@@ -1,0 +1,79 @@
+{
+  "name": "UBU Chatbot OSD (Full Example)",
+  "description": "Full n8n workflow example file for OSD chatbot integration. Replace this file content with your full exported workflow JSON when needed.",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "สวัสดี 👋\nนี่คือผู้ช่วยอัจฉริยะประจำสำนักงานพัฒนานักศึกษา มหาวิทยาลัยอุบลราชธานี",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        9488,
+        -64
+      ],
+      "id": "0038095c-7d73-4da0-bb70-9f016822daa9",
+      "name": "When chat message received",
+      "webhookId": "d6aec36a-8eb0-49d8-a153-d5e2b46b4e93"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput || $json.body?.message?.text || \"สวัสดี\" }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        9856,
+        -64
+      ],
+      "id": "797a1f08-0d34-472e-8cd3-68559c76c9ad",
+      "name": "AI Agent",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output ?? $json.answer ?? $json.text ?? \"\";\nlet parsed = raw;\nif (typeof raw === \"string\") {\n  const cleaned = raw.replace(/^```json\\s*/i, \"\").replace(/```$/i, \"\").trim();\n  try { parsed = JSON.parse(cleaned); } catch { parsed = { answer: cleaned }; }\n}\nconst allow = [\"happy\", \"thinking\", \"searching\", \"sorry\", \"welcome\"];\nconst expression = allow.includes((parsed.expression || \"\").toLowerCase()) ? parsed.expression.toLowerCase() : \"sorry\";\nconst answer = parsed.answer || parsed.message || \"ขออภัยครับ ไม่พบข้อมูล\";\nconst mascot = parsed.mascot || \"GuayJub\";\nconst source = parsed.source || \"n8n\";\nreturn [{ json: { output: answer, mascot, expression, answer, source } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        10208,
+        -64
+      ],
+      "id": "e5637e13-4dc6-4daa-9c75-346d563b4ffc",
+      "name": "Code in JavaScript6"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

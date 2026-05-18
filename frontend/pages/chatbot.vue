@@ -1,0 +1,906 @@
+<template>
+  <div class="min-h-screen py-8 md:py-12">
+    <div class="mx-auto max-w-7xl space-y-8">
+      <section class="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-white p-6 md:p-8">
+        <p class="text-sm font-semibold uppercase tracking-wide text-amber-700">Chatbot Popup Sandbox</p>
+        <h1 class="mt-2 text-2xl font-bold text-gray-900 md:text-4xl">สร้างและทดสอบบอทได้ทันที</h1>
+        <p class="mt-2 text-sm text-gray-700">ตั้งค่า webhook, สี, รูปท่าทาง และลองแชทกับ popup preview แบบ realtime ในหน้าเดียว</p>
+      </section>
+
+      <section class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <article class="rounded-2xl border border-gray-200 bg-white p-5">
+          <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-gray-900">Step 2 · ตั้งค่าบอท</h2>
+            <button class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200" @click="resetAll">รีเซ็ต</button>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="space-y-1 text-sm md:col-span-2">
+              <span class="font-medium text-gray-700">Webhook URL (n8n)</span>
+              <input ref="webhookInputRef" v-model="config.webhookUrl" class="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" type="url" />
+            </label>
+            <label class="space-y-1 text-sm">
+              <span class="font-medium text-gray-700">ชื่อบอท</span>
+              <input ref="botNameInputRef" v-model="config.botName" class="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" type="text" />
+            </label>
+            <label class="space-y-1 text-sm">
+              <span class="font-medium text-gray-700">ชื่อมาสคอต</span>
+              <input v-model="config.mascotName" class="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" type="text" />
+            </label>
+            <label class="space-y-1 text-sm md:col-span-2">
+              <span class="font-medium text-gray-700">ข้อความต้อนรับ (welcome)</span>
+              <textarea ref="welcomeInputRef" v-model="config.welcomeMessage" rows="2" class="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+            </label>
+          </div>
+
+          <div ref="colorSectionRef" class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3" :class="activeGuideStep === 'color' ? 'ring-2 ring-amber-300' : ''">
+            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">สีแถบหัวแชท</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button v-for="color in presetHeaderColors" :key="color" class="h-8 w-8 rounded-full ring-2 ring-offset-2 transition" :class="config.headerColor === color ? 'ring-gray-800' : 'ring-transparent'" :style="{ backgroundColor: color }" @click="config.headerColor = color" />
+              <label class="ml-2 inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700">
+                เลือกสีเอง
+                <input v-model="config.headerColor" type="color" class="h-6 w-8 cursor-pointer border-0 bg-transparent p-0" />
+              </label>
+            </div>
+          </div>
+
+          <div ref="expressionSectionRef" class="mt-4 rounded-xl border border-gray-200 p-3" :class="activeGuideStep === 'expression' ? 'ring-2 ring-amber-300' : ''">
+            <div class="mb-2 flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-gray-800">Step 3 · ใส่รูปตามท่าทาง</h3>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1 hover:bg-gray-50"
+                  title="ดูรูปเต็ม"
+                  @click="openMascotPosterModal"
+                >
+                  <img :src="mascotPosterImage" alt="UBU BuaBan Poster" class="h-7 w-7 rounded object-cover" />
+                  <span class="text-xs text-gray-600">BuaBan Mascot</span>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50"
+                  @click="downloadMascotPack"
+                >
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+                  </svg>
+                  ดาวน์โหลดชุดมาสคอต
+                </button>
+                <span class="text-xs text-gray-500">อัปโหลดไม่ถาวร (รีเฟรชแล้วหาย)</span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <div v-for="rule in expressionRules" :key="rule.key" class="grid gap-2 rounded-lg border border-gray-200 p-2 md:grid-cols-[64px_1fr_auto] md:items-center">
+                <img :src="expressionImages[rule.key]" :alt="rule.key" class="h-14 w-14 rounded-lg object-cover" />
+                <div>
+                  <p class="text-sm font-semibold text-gray-800">{{ rule.key }}</p>
+                  <p class="text-xs text-gray-600">{{ rule.description }}</p>
+                </div>
+                <label class="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                  อัปโหลดรูป
+                  <input type="file" accept="image/*" class="hidden" @change="onExpressionUpload(rule.key, $event)" />
+                </label>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 class="text-base font-semibold text-gray-900">ขั้นตอนแบบคลิกตามได้เลย</h3>
+          <div class="mt-3 space-y-2">
+            <button type="button" @click="goToGuideStep('webhook')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
+              1) กรอก Webhook URL
+            </button>
+            <button type="button" @click="goToGuideStep('profile')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
+              2) ตั้งชื่อบอท + ข้อความต้อนรับ
+            </button>
+            <button type="button" @click="goToGuideStep('color')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
+              3) เลือกสีหัวแชท
+            </button>
+            <button type="button" @click="goToGuideStep('expression')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
+              4) อัปโหลดรูปท่าทางทั้ง 5 expression
+            </button>
+            <button type="button" @click="goToGuideStep('preview')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
+              5) เปิด Popup Preview และลองคุยจริง
+            </button>
+            <button type="button" @click="goToGuideStep('flow')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
+              6) ตัวอย่าง n8n Flow (ตามชุด OSD)
+            </button>
+            <button type="button" @click="goToGuideStep('install')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
+              7) Copy โค้ดไปปลั๊กเว็บของคุณ
+            </button>
+          </div>
+          <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
+            <p class="text-xs font-medium text-blue-700">JSON Contract</p>
+            <pre class="mt-2 overflow-x-auto text-xs text-blue-900">{{ schemaText }}</pre>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <article ref="previewSectionRef" class="rounded-2xl border border-gray-200 bg-white p-5" :class="activeGuideStep === 'preview' ? 'ring-2 ring-amber-300' : ''">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900">Step 4 · Popup Preview (Realtime)</h2>
+              <p class="mt-1 text-sm text-gray-600">แก้ค่าด้านบนแล้ว preview เปลี่ยนทันที</p>
+            </div>
+            <button class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200" @click="chatOpen = !chatOpen">{{ chatOpen ? 'ปิด popup' : 'แสดง popup' }}</button>
+          </div>
+
+          <div class="relative mt-4 h-[470px] overflow-hidden rounded-2xl border border-dashed border-gray-300 bg-gradient-to-b from-gray-50 to-white p-4">
+            <div class="absolute right-4 top-4 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow">Sandbox</div>
+
+            <button
+              v-if="!chatOpen"
+              class="absolute bottom-4 right-4 rounded-full bg-transparent p-0 drop-shadow-lg transition-transform duration-200 hover:scale-105"
+              @click="chatOpen = true"
+              aria-label="เปิดแชทบอท"
+            >
+              <img :src="currentMascotImage" alt="mascot" class="h-14 w-14 animate-bounce object-contain" />
+            </button>
+
+            <div v-else class="absolute bottom-4 right-4 flex h-[400px] w-[320px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+              <div class="flex items-center justify-between px-3 py-2 text-white" :style="{ backgroundColor: config.headerColor }">
+                <div class="flex items-center gap-2">
+                  <img :src="currentMascotImage" alt="mascot" class="h-8 w-8 rounded-full bg-white object-cover p-0.5" />
+                  <div>
+                    <p class="text-xs font-semibold">{{ config.botName }}</p>
+                    <p class="text-[10px] opacity-90">{{ lastExpression }}</p>
+                  </div>
+                </div>
+                <button class="rounded p-1 text-xs hover:bg-black/20" @click="chatOpen = false">x</button>
+              </div>
+
+              <div class="flex-1 space-y-3 overflow-y-auto bg-gray-50 p-3">
+                <div class="flex gap-2">
+                  <img :src="expressionImages.welcome" alt="welcome" class="h-8 w-8 rounded-full object-cover" />
+                  <div class="max-w-[82%] rounded-xl rounded-tl-none bg-white px-3 py-2 text-xs text-gray-800 shadow-sm">{{ config.welcomeMessage }}</div>
+                </div>
+                <div v-for="(msg, idx) in messages" :key="idx" class="flex" :class="msg.role === 'user' ? 'justify-end' : 'justify-start'">
+                  <div class="flex items-start gap-2" :class="msg.role === 'user' ? 'flex-row-reverse' : ''">
+                    <img v-if="msg.role === 'assistant'" :src="currentMascotImage" alt="assistant" class="h-8 w-8 rounded-full object-cover" />
+                    <div class="max-w-[85%] rounded-xl px-3 py-2 text-xs shadow-sm" :class="msg.role === 'user' ? 'text-white' : 'bg-white text-gray-800'" :style="msg.role === 'user' ? { backgroundColor: config.headerColor } : undefined">{{ msg.content }}</div>
+                  </div>
+                </div>
+                <div v-if="sending" class="flex justify-start">
+                  <div class="flex items-start gap-2">
+                    <img :src="expressionImages.thinking" alt="assistant-loading" class="h-8 w-8 rounded-full object-cover" />
+                    <div class="rounded-xl bg-white px-3 py-2 text-xs text-gray-700 shadow-sm">
+                      <span class="inline-flex items-center gap-1">
+                        <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.2s]"></span>
+                        <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.1s]"></span>
+                        <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400"></span>
+                        <span class="ml-1 text-[11px] text-gray-500">กำลังพิมพ์...</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <form class="flex gap-2 border-t border-gray-100 p-2" @submit.prevent="sendChat">
+                <input v-model="inputMessage" :disabled="sending" placeholder="พิมพ์ข้อความ..." class="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400" />
+                <button
+                  type="submit"
+                  :disabled="sending || !inputMessage.trim()"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-full text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white/80 disabled:shadow-none"
+                  :style="!sending && inputMessage.trim() ? { backgroundColor: config.headerColor } : undefined"
+                  aria-label="ส่งข้อความ"
+                >
+                  <svg
+                    v-if="!sending"
+                    class="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                  <svg
+                    v-else
+                    class="h-4 w-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                </button>
+              </form>
+            </div>
+          </div>
+        </article>
+
+        <article class="rounded-2xl border border-gray-200 bg-white p-5">
+          <h2 class="text-lg font-semibold text-gray-900">Live JSON Inspector</h2>
+          <p class="mt-1 text-sm text-gray-600">ปรับค่าแล้วลองส่งแชทได้ทันที ถ้าต้องการทดสอบแบบ payload ให้วาง JSON ตรงนี้ได้เลย</p>
+          <textarea v-model="payloadText" rows="8" class="mt-3 w-full rounded-xl border border-gray-300 px-3 py-2 font-mono text-xs outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700" @click="applyPayload">Apply JSON</button>
+            <button class="rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-200" @click="copyPayload">Copy JSON</button>
+            <button class="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700" @click="fillSample">เติมค่าพร้อมเทส</button>
+            <span class="self-center text-xs text-gray-500">{{ statusText }}</span>
+          </div>
+        </article>
+      </section>
+
+      <section ref="flowSectionRef" class="rounded-2xl border border-gray-200 bg-white p-5 md:p-6" :class="activeGuideStep === 'flow' ? 'ring-2 ring-amber-300' : ''">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">ตัวอย่าง n8n Flow (ตามชุด OSD)</h2>
+            <p class="text-sm text-gray-600">นำไปวางใน n8n import workflow ได้ และแก้ credentials/collection ตามระบบจริง</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200" @click="copyFlowExample">Copy flow JSON</button>
+            <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700" @click="downloadFlowExample">Download .json</button>
+          </div>
+        </div>
+        <pre class="mt-4 max-h-72 overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs">{{ n8nFlowExample }}</pre>
+      </section>
+
+      <section ref="installSectionRef" class="rounded-2xl border border-gray-200 bg-white p-5 md:p-6" :class="activeGuideStep === 'install' ? 'ring-2 ring-amber-300' : ''">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">วิธีนำไปปลั๊กกับเว็บ</h2>
+            <p class="text-sm text-gray-600">เลือกสแต็กที่ใช้ แล้วทำตามขั้นตอนแบบจับมือทำได้ทันที</p>
+          </div>
+          <button class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200" @click="copyInstallSnippet">Copy code</button>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button
+            v-for="tab in installTabs"
+            :key="tab.id"
+            class="rounded-lg px-3 py-1.5 text-xs font-semibold"
+            :class="activeInstallTab === tab.id ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+            @click="activeInstallTab = tab.id"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">ต้องใส่ตรงไหนในเว็บปลายทาง</p>
+          <div class="mt-2 space-y-1 text-xs text-amber-900">
+            <p><strong>`headerColor`</strong> -> ใช้เป็นสีพื้นหลังหัวกล่องแชท (chat header)</p>
+            <p><strong>`welcomeMessage`</strong> -> ข้อความแรกที่แสดงตอนเปิด popup</p>
+            <p><strong>`mascotImages`</strong> -> map รูปตามท่าทาง `happy/thinking/searching/sorry/welcome`</p>
+            <p><strong>`webhookUrl`</strong> -> endpoint n8n สำหรับส่งข้อความ</p>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <p class="text-xs font-semibold uppercase tracking-wide text-gray-600">ขั้นตอนจับมือทำ ({{ activeInstallLabel }})</p>
+          <ol class="mt-2 list-decimal space-y-1 pl-5 text-xs text-gray-700">
+            <li v-for="(step, index) in activeInstallSteps" :key="index">{{ step }}</li>
+          </ol>
+        </div>
+
+        <pre class="mt-4 overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs">{{ activeInstallSnippet }}</pre>
+      </section>
+    </div>
+
+    <Transition name="fade">
+      <div
+        v-if="copyToast.show"
+        class="fixed left-1/2 top-6 z-[100] -translate-x-1/2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-2xl"
+      >
+        {{ copyToast.message }}
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="showMascotPosterModal"
+        class="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4"
+        @click.self="showMascotPosterModal = false"
+      >
+        <div class="w-full max-w-3xl rounded-2xl bg-white p-3 shadow-2xl md:p-4">
+          <div class="mb-3 flex items-center justify-between">
+            <h4 class="text-sm font-semibold text-gray-800">BuaBan Mascot Poster</h4>
+            <button
+              type="button"
+              class="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              @click="showMascotPosterModal = false"
+            >
+              ปิด
+            </button>
+          </div>
+          <img :src="mascotPosterImage" alt="UBU BuaBan Poster full size" class="max-h-[78vh] w-full rounded-xl object-contain" />
+        </div>
+      </div>
+    </Transition>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue"
+import { useHead, useRuntimeConfig } from "nuxt/app"
+
+type Payload = { mascot: string; expression: string; answer: string; source: string }
+type Message = { role: "user" | "assistant"; content: string }
+type ExpressionKey = "happy" | "thinking" | "searching" | "sorry" | "welcome"
+
+useHead({
+  title: "Chatbot Popup Sandbox - UBU AI SERVICE",
+  meta: [{ name: "description", content: "ทดสอบ popup chatbot โดยใส่ webhook n8n และมาสคอตของตัวเอง" }]
+})
+
+const base = (useRuntimeConfig().public as any).basePath || "/"
+const chatOpen = ref(true)
+const sending = ref(false)
+const inputMessage = ref("")
+const statusText = ref("พร้อมทดสอบ")
+const lastExpression = ref<ExpressionKey>("welcome")
+const activeGuideStep = ref<"webhook" | "profile" | "color" | "expression" | "preview" | "flow" | "install" | null>(null)
+const flowFilePath = "/examples/osd-flow-full.json"
+const n8nFlowExample = ref("กำลังโหลดไฟล์ flow...")
+const webhookInputRef = ref<HTMLInputElement | null>(null)
+const botNameInputRef = ref<HTMLInputElement | null>(null)
+const welcomeInputRef = ref<HTMLTextAreaElement | null>(null)
+const colorSectionRef = ref<HTMLElement | null>(null)
+const expressionSectionRef = ref<HTMLElement | null>(null)
+const previewSectionRef = ref<HTMLElement | null>(null)
+const flowSectionRef = ref<HTMLElement | null>(null)
+const installSectionRef = ref<HTMLElement | null>(null)
+
+const config = ref({
+  webhookUrl: "https://n8n.ubu.ac.th/webhook/f80778cf-c9b6-495a-88a9-e7ed43ef8fa7/chat",
+  botName: "น้องบัวบาน",
+  mascotName: "บัวบาน",
+  welcomeMessage: "น้องบัวบาน ยินดีต้อนรับ 🥰",
+  headerColor: "#FFBF00"
+})
+
+const presetHeaderColors = ["#4f46e5", "#0ea5e9", "#16a34a", "#f97316", "#e11d48", "#111827"]
+const expressionRules: Array<{ key: ExpressionKey; description: string }> = [
+  { key: "happy", description: "ใช้เมื่อหาข้อมูลพบ (Success) หรือแนะนำเรื่องสนุกๆ" },
+  { key: "thinking", description: "ใช้เมื่อกำลังวิเคราะห์คำถามที่ซับซ้อน" },
+  { key: "searching", description: "ใช้เมื่อหาในไฟล์ไม่เจอและกำลังจะไปหาใน Google/Web" },
+  { key: "sorry", description: "ใช้เมื่อหาข้อมูลไม่เจอจริงๆ หรือต้องแนะนำให้ไปหาเจ้าหน้าที่" },
+  { key: "welcome", description: "ใช้ทักทายตอนเริ่มแชท" }
+]
+
+const expressionImages = ref<Record<ExpressionKey, string>>({
+  happy: `${base}mascots/happy.svg`,
+  thinking: `${base}mascots/thinking.svg`,
+  searching: `${base}mascots/BuaBan.svg`,
+  sorry: `${base}mascots/sorry.svg`,
+  welcome: `${base}mascots/welcome.svg`
+})
+
+const payload: Payload = {
+  mascot: "บัวบาน",
+  expression: "happy",
+  answer: "สวัสดีครับ นี่คือข้อความตัวอย่างจาก n8n",
+  source: "https://n8n.ubu.ac.th/webhook/f80778cf-c9b6-495a-88a9-e7ed43ef8fa7/chat"
+}
+const payloadText = ref(JSON.stringify(payload, null, 2))
+
+const schemaText = JSON.stringify(
+  {
+    mascot: "บัวบาน",
+    expression: "ชื่อท่าทาง",
+    answer: "เนื้อหาคำตอบของคุณ...",
+    source: "ชื่อไฟล์หรือ URL"
+  },
+  null,
+  2
+)
+
+const messages = ref<Message[]>([])
+const activeInstallTab = ref<"html" | "node" | "php">("html")
+
+const installTabs = [
+  { id: "html", label: "HTML/Vanilla JS" },
+  { id: "node", label: "Node.js (Express)" },
+  { id: "php", label: "PHP (cURL)" }
+] as const
+
+const installSnippets = computed<Record<"html" | "node" | "php", string>>(() => ({
+  html: `<!-- วางโค้ดนี้ก่อน </body> ในไฟล์หน้าเว็บของคุณ -->
+<style>
+  #ubu-chatbot { position: fixed; right: 20px; bottom: 20px; z-index: 2147483000; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  #ubu-chatbot .panel { width: 340px; height: 470px; background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; box-shadow: 0 20px 40px rgba(0,0,0,.15); display: flex; flex-direction: column; overflow: hidden; }
+  #ubu-chatbot .header { color: #fff; padding: 10px 12px; font-size: 14px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+  #ubu-chatbot .body { flex: 1; overflow: auto; background: #f8fafc; padding: 10px; }
+  #ubu-chatbot .msg-row { display: flex; align-items: flex-end; gap: 8px; margin: 8px 0; }
+  #ubu-chatbot .msg-row.user { justify-content: flex-end; }
+  #ubu-chatbot .msg-row.bot { justify-content: flex-start; }
+  #ubu-chatbot .msg-avatar { width: 26px; height: 26px; border-radius: 999px; object-fit: cover; background: #fff; border: 1px solid #e5e7eb; flex: 0 0 auto; }
+  #ubu-chatbot .msg { max-width: 85%; margin: 0; padding: 8px 10px; border-radius: 12px; font-size: 13px; line-height: 1.35; white-space: pre-wrap; }
+  #ubu-chatbot .msg.bot { background: #fff; border: 1px solid #e5e7eb; color: #111827; }
+  #ubu-chatbot .msg.user { margin-left: auto; color: #fff; }
+  #ubu-chatbot .input { border-top: 1px solid #e5e7eb; padding: 8px; display: flex; gap: 6px; background: #fff; }
+  #ubu-chatbot .input input { flex: 1; border: 1px solid #d1d5db; border-radius: 8px; padding: 7px 9px; font-size: 13px; }
+  #ubu-chatbot .input button { border: 0; width: 34px; height: 34px; border-radius: 999px; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease; }
+  #ubu-chatbot .input button:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,.14); }
+  #ubu-chatbot .input button:disabled { background: #d1d5db !important; cursor: not-allowed; box-shadow: none; transform: none; }
+  #ubu-chatbot .input button svg { width: 16px; height: 16px; }
+  #ubu-chatbot .launcher-wrap { position: fixed; right: 24px; bottom: 16px; display: flex; align-items: center; justify-content: center; z-index: 3; }
+  #ubu-chatbot .mascot-btn { border: 0; background: transparent; cursor: pointer; padding: 0; animation: ubu-bounce 2s infinite; }
+  #ubu-chatbot .mascot-btn:hover { animation-play-state: paused; transform: scale(1.04); }
+  #ubu-chatbot .mascot-img { width: 90px; height: 90px; object-fit: contain; filter: drop-shadow(0 12px 20px rgba(0,0,0,.16)); }
+  @keyframes ubu-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+</style>
+
+<div id="ubu-chatbot">
+  <div id="ubu-chatbot-launcher" class="launcher-wrap">
+    <button id="ubu-chatbot-fab" class="mascot-btn" aria-label="แสดงหน้าต่างแชท">
+      <img id="ubu-chatbot-launcher-img" class="mascot-img" src="${expressionImages.value.welcome}" alt="${config.value.mascotName}" />
+    </button>
+  </div>
+  <div id="ubu-chatbot-panel" class="panel" style="display:flex;">
+    <div id="ubu-chatbot-header" class="header">
+      <span>${config.value.botName}</span>
+      <button id="ubu-chatbot-close" style="background:transparent;border:0;color:#fff;font-weight:700;cursor:pointer;">x</button>
+    </div>
+    <div id="ubu-chatbot-body" class="body"></div>
+    <form id="ubu-chatbot-form" class="input">
+      <input id="ubu-chatbot-input" placeholder="พิมพ์ข้อความ..." />
+      <button id="ubu-chatbot-send" type="submit" aria-label="ส่งข้อความ">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+        </svg>
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+const BOT_CONFIG = {
+  webhookUrl: "${config.value.webhookUrl}",
+  headerColor: "${config.value.headerColor}",
+  welcomeMessage: "${config.value.welcomeMessage.replace(/"/g, '\\"')}",
+  mascotImages: {
+    happy: "${expressionImages.value.happy}",
+    thinking: "${expressionImages.value.thinking}",
+    searching: "${expressionImages.value.searching}",
+    sorry: "${expressionImages.value.sorry}",
+    welcome: "${expressionImages.value.welcome}"
+  }
+};
+
+const panel = document.getElementById("ubu-chatbot-panel");
+const fab = document.getElementById("ubu-chatbot-fab");
+const launcher = document.getElementById("ubu-chatbot-launcher");
+const launcherImg = document.getElementById("ubu-chatbot-launcher-img");
+const closeBtn = document.getElementById("ubu-chatbot-close");
+const header = document.getElementById("ubu-chatbot-header");
+const body = document.getElementById("ubu-chatbot-body");
+const form = document.getElementById("ubu-chatbot-form");
+const input = document.getElementById("ubu-chatbot-input");
+const sendBtn = document.getElementById("ubu-chatbot-send");
+header.style.background = BOT_CONFIG.headerColor;
+sendBtn.style.background = BOT_CONFIG.headerColor;
+launcher.style.display = "none";
+if (!body.dataset.welcomeShown) {
+  addMsg(BOT_CONFIG.welcomeMessage, "bot", "welcome");
+  body.dataset.welcomeShown = "1";
+}
+
+function addMsg(text, who, expression = "welcome") {
+  const row = document.createElement("div");
+  row.className = "msg-row " + who;
+  if (who === "bot") {
+    const avatar = document.createElement("img");
+    avatar.className = "msg-avatar";
+    avatar.src = BOT_CONFIG.mascotImages[expression] || BOT_CONFIG.mascotImages.welcome;
+    avatar.alt = "bot";
+    row.appendChild(avatar);
+  }
+  const bubble = document.createElement("div");
+  bubble.className = "msg " + who;
+  if (who === "user") bubble.style.background = BOT_CONFIG.headerColor;
+  bubble.textContent = text;
+  row.appendChild(bubble);
+  body.appendChild(row);
+  body.scrollTop = body.scrollHeight;
+}
+
+function setLoading(isLoading) {
+  sendBtn.disabled = isLoading;
+  input.disabled = isLoading;
+  if (isLoading) {
+    window.__ubuLoading = document.createElement("div");
+    window.__ubuLoading.className = "msg-row bot";
+    const avatar = document.createElement("img");
+    avatar.className = "msg-avatar";
+    avatar.src = BOT_CONFIG.mascotImages.thinking || BOT_CONFIG.mascotImages.welcome;
+    avatar.alt = "bot-loading";
+    const bubble = document.createElement("div");
+    bubble.className = "msg bot";
+    bubble.textContent = "กำลังพิมพ์...";
+    window.__ubuLoading.appendChild(avatar);
+    window.__ubuLoading.appendChild(bubble);
+    body.appendChild(window.__ubuLoading);
+    body.scrollTop = body.scrollHeight;
+  } else if (window.__ubuLoading) {
+    window.__ubuLoading.remove();
+    window.__ubuLoading = null;
+  }
+}
+
+async function askBot(message) {
+  const res = await fetch(BOT_CONFIG.webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chatInput: message, message, mascot: "${config.value.mascotName}" })
+  });
+  const data = await res.json();
+  return {
+    answer: data.answer || data.message || "ไม่พบคำตอบ",
+    expression: data.expression || "sorry"
+  };
+}
+
+fab.onclick = () => {
+  panel.style.display = "flex";
+  launcher.style.display = "none";
+};
+closeBtn.onclick = () => {
+  panel.style.display = "none";
+  launcher.style.display = "flex";
+};
+
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  const message = input.value.trim();
+  if (!message || input.disabled) return;
+  input.value = "";
+  addMsg(message, "user");
+  setLoading(true);
+  try {
+    const bot = await askBot(message);
+    setLoading(false);
+    addMsg(bot.answer, "bot", bot.expression);
+    const nextImg = BOT_CONFIG.mascotImages[bot.expression] || BOT_CONFIG.mascotImages.welcome;
+    if (nextImg) launcherImg.src = nextImg;
+  } catch (err) {
+    setLoading(false);
+    addMsg("เชื่อมต่อไม่สำเร็จ", "bot", "sorry");
+  }
+};
+<\/script>`,
+  node: `import express from "express";
+import fetch from "node-fetch";
+const app = express();
+app.use(express.json());
+
+const BOT_CONFIG = {
+  webhookUrl: "${config.value.webhookUrl}",
+  headerColor: "${config.value.headerColor}",
+  welcomeMessage: "${config.value.welcomeMessage.replace(/"/g, '\\"')}"
+};
+
+app.post("/chat", async (req, res) => {
+  const r = await fetch(BOT_CONFIG.webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chatInput: req.body.message, message: req.body.message })
+  });
+  const data = await r.json();
+  res.json(data);
+});`,
+  php: `<?php
+$BOT_CONFIG = [
+  "webhookUrl" => "${config.value.webhookUrl}",
+  "headerColor" => "${config.value.headerColor}",
+  "welcomeMessage" => "${config.value.welcomeMessage.replace(/"/g, '\\"')}"
+];
+
+$webhook = $BOT_CONFIG["webhookUrl"];
+$payload = json_encode([
+  "chatInput" => $_POST["message"] ?? "สวัสดี",
+  "message" => $_POST["message"] ?? "สวัสดี"
+]);
+$ch = curl_init($webhook);
+curl_setopt_array($ch, [
+  CURLOPT_POST => true,
+  CURLOPT_RETURNTRANSFER => true,
+  CURLOPT_HTTPHEADER => ["Content-Type: application/json"],
+  CURLOPT_POSTFIELDS => $payload
+]);
+$result = curl_exec($ch);
+curl_close($ch);
+header("Content-Type: application/json");
+echo $result;
+?>`
+}))
+
+const activeInstallSnippet = computed(() => installSnippets.value[activeInstallTab.value])
+const activeInstallLabel = computed(() => installTabs.find((tab) => tab.id === activeInstallTab.value)?.label || "")
+const activeInstallSteps = computed(() => {
+  if (activeInstallTab.value === "html") {
+    return [
+      "เปิดไฟล์หน้าเว็บหลัก เช่น index.html หรือไฟล์ layout หลัก",
+      "วางโค้ดทั้งก้อนจากด้านล่างก่อนแท็กปิด </body>",
+      "บันทึกไฟล์และรีโหลดหน้าเว็บ",
+      "โหลดหน้าเว็บแล้วแชทจะเปิดทันที ถ้าปิดไปให้กดมาสคอตมุมขวาล่างเพื่อเปิดใหม่"
+    ]
+  }
+  if (activeInstallTab.value === "node") {
+    return [
+      "เปิดไฟล์ backend เช่น app.js / server.js",
+      "วางโค้ดตัวอย่างให้เกิด endpoint /chat",
+      "ติดตั้งแพ็กเกจที่จำเป็น (express, node-fetch) และรีสตาร์ตเซิร์ฟเวอร์",
+      "ให้ frontend เรียก endpoint /chat ของเว็บตัวเอง"
+    ]
+  }
+  return [
+    "สร้างไฟล์ใหม่ เช่น chatbot-proxy.php",
+    "วางโค้ดตัวอย่างลงไฟล์และบันทึก",
+    "เรียกไฟล์นี้จากหน้าเว็บด้วย fetch หรือ form POST",
+    "ทดสอบว่าคืน JSON ได้ก่อนเชื่อมกับ UI popup"
+  ]
+})
+const copyToast = ref({ show: false, message: "" })
+let copyToastTimer: ReturnType<typeof setTimeout> | null = null
+const mascotPosterImage = `${base}mascots/UBU_BuaBan.png`
+const showMascotPosterModal = ref(false)
+
+const currentMascotImage = computed(() => {
+  return expressionImages.value[lastExpression.value] || expressionImages.value.happy
+})
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ""))
+    reader.onerror = () => reject(new Error("file-read-failed"))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onExpressionUpload(key: ExpressionKey, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  try {
+    const image = await readFileAsDataUrl(file)
+    expressionImages.value[key] = image
+    statusText.value = `อัปโหลดรูปท่า ${key} แล้ว`
+  } catch {
+    statusText.value = "อัปโหลดรูปไม่สำเร็จ"
+  }
+}
+
+function downloadMascotPack() {
+  const mascotFiles = [
+    "BuaBan.svg",
+    "happy.svg",
+    "thinking.svg",
+    "searching.svg",
+    "sorry.svg",
+    "welcome.svg",
+    "UBU_BuaBan.png"
+  ]
+  for (const filename of mascotFiles) {
+    const link = document.createElement("a")
+    link.href = `${base}mascots/${filename}`
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  }
+  statusText.value = "เริ่มดาวน์โหลดชุดมาสคอตแล้ว"
+}
+
+function openMascotPosterModal() {
+  showMascotPosterModal.value = true
+}
+
+function fillSample() {
+  payloadText.value = JSON.stringify(
+    {
+      mascot: config.value.mascotName || "MyMascot",
+      expression: "happy",
+      answer: "ข้อความทดสอบจาก payload editor",
+      source: config.value.webhookUrl
+    },
+    null,
+    2
+  )
+}
+
+function applyPayload() {
+  try {
+    const parsed = JSON.parse(payloadText.value)
+    if (!parsed.answer) throw new Error("invalid")
+    messages.value.push({ role: "assistant", content: String(parsed.answer) })
+    const exp = String(parsed.expression || "happy").toLowerCase() as ExpressionKey
+    lastExpression.value = expressionRules.some((r) => r.key === exp) ? exp : "sorry"
+    statusText.value = "Apply สำเร็จ"
+  } catch {
+    statusText.value = "JSON ไม่ถูกต้อง"
+  }
+}
+
+function extractAnswer(data: any): Payload {
+  const stripCodeFence = (text: string): string => {
+    const trimmed = text.trim()
+    const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+    return match ? match[1].trim() : trimmed
+  }
+
+  const parseMaybeJsonString = (value: unknown): any => {
+    if (typeof value !== "string") return value
+    const trimmed = stripCodeFence(value)
+    if (!trimmed) return value
+    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      try {
+        return JSON.parse(trimmed)
+      } catch {
+        return value
+      }
+    }
+    return value
+  }
+
+  const level1 = parseMaybeJsonString(data)
+  const outputParsed = parseMaybeJsonString(level1?.output)
+  const candidate = typeof outputParsed === "object" && outputParsed !== null ? outputParsed : level1
+
+  let answerCandidate =
+    candidate?.answer ??
+    candidate?.message ??
+    candidate?.text ??
+    candidate?.response ??
+    (typeof candidate?.output === "string" ? candidate.output : "") ??
+    ""
+
+  if (typeof answerCandidate === "string") {
+    const cleaned = stripCodeFence(answerCandidate)
+    const parsedNested = parseMaybeJsonString(cleaned)
+    if (typeof parsedNested === "object" && parsedNested !== null) {
+      answerCandidate = parsedNested.answer ?? parsedNested.message ?? parsedNested.text ?? cleaned
+    } else {
+      answerCandidate = cleaned
+    }
+  }
+
+  return {
+    mascot: String(candidate?.mascot || level1?.mascot || config.value.mascotName || "บัวบาน"),
+    expression: String(candidate?.expression || level1?.expression || "sorry"),
+    answer: String(answerCandidate || "ไม่มีคำตอบจาก webhook"),
+    source: String(candidate?.source || level1?.source || config.value.webhookUrl)
+  }
+}
+
+async function sendChat() {
+  if (!inputMessage.value.trim() || sending.value) return
+  const text = inputMessage.value.trim()
+  inputMessage.value = ""
+  messages.value.push({ role: "user", content: text })
+  lastExpression.value = "thinking"
+  sending.value = true
+  try {
+    const response = await fetch(config.value.webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chatInput: text,
+        message: text,
+        mascot: config.value.mascotName,
+        mode: "build"
+      })
+    })
+    if (!response.ok) throw new Error(String(response.status))
+    const data = await response.json()
+    const parsed = extractAnswer(data)
+    const exp = (parsed.expression || "").toLowerCase() as ExpressionKey
+    lastExpression.value = expressionRules.some((r) => r.key === exp) ? exp : "sorry"
+    messages.value.push({ role: "assistant", content: parsed.answer })
+    statusText.value = `ตอบกลับจาก ${parsed.source || "webhook"}`
+  } catch {
+    messages.value.push({ role: "assistant", content: "เชื่อมต่อ webhook ไม่สำเร็จ กรุณาตรวจสอบ URL หรือ CORS" })
+    statusText.value = "Webhook error"
+  } finally {
+    sending.value = false
+  }
+}
+
+function resetAll() {
+  chatOpen.value = false
+  lastExpression.value = "welcome"
+  config.value = {
+    webhookUrl: "https://n8n.ubu.ac.th/webhook/f80778cf-c9b6-495a-88a9-e7ed43ef8fa7/chat",
+    botName: "UBU AI Bot",
+    mascotName: "บัวบาน",
+    welcomeMessage: "น้องบัวบานแทน",
+    headerColor: "#4f46e5"
+  }
+  expressionImages.value = {
+    happy: `${base}mascots/happy.svg`,
+    thinking: `${base}mascots/thinking.svg`,
+    searching: `${base}mascots/BuaBan.svg`,
+    sorry: `${base}mascots/sorry.svg`,
+    welcome: `${base}mascots/welcome.svg`
+  }
+  messages.value = []
+  payloadText.value = JSON.stringify(payload, null, 2)
+  statusText.value = "รีเซ็ตเรียบร้อย"
+}
+
+async function copyText(text: string, success: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    statusText.value = success
+    copyToast.value = { show: true, message: success }
+    if (copyToastTimer) clearTimeout(copyToastTimer)
+    copyToastTimer = setTimeout(() => {
+      copyToast.value = { show: false, message: "" }
+    }, 1800)
+  } catch {
+    statusText.value = "คัดลอกไม่สำเร็จ"
+    copyToast.value = { show: true, message: "คัดลอกไม่สำเร็จ" }
+  }
+}
+function copyPayload() { copyText(payloadText.value, "คัดลอก JSON แล้ว") }
+function copyInstallSnippet() { copyText(activeInstallSnippet.value, "คัดลอกโค้ดติดตั้งแล้ว") }
+function copyFlowExample() { copyText(n8nFlowExample.value, "คัดลอก n8n flow แล้ว") }
+function focusBlock(el: HTMLElement | null) {
+  if (!el) return
+  el.scrollIntoView({ behavior: "smooth", block: "center" })
+}
+function goToGuideStep(step: "webhook" | "profile" | "color" | "expression" | "preview" | "flow" | "install") {
+  activeGuideStep.value = step
+  if (step === "webhook") {
+    webhookInputRef.value?.scrollIntoView({ behavior: "smooth", block: "center" })
+    webhookInputRef.value?.focus()
+  } else if (step === "profile") {
+    botNameInputRef.value?.scrollIntoView({ behavior: "smooth", block: "center" })
+    botNameInputRef.value?.focus()
+    welcomeInputRef.value?.focus()
+  } else if (step === "color") {
+    focusBlock(colorSectionRef.value)
+  } else if (step === "expression") {
+    focusBlock(expressionSectionRef.value)
+  } else if (step === "preview") {
+    chatOpen.value = true
+    focusBlock(previewSectionRef.value)
+  } else if (step === "flow") {
+    focusBlock(flowSectionRef.value)
+  } else if (step === "install") {
+    focusBlock(installSectionRef.value)
+  }
+  setTimeout(() => {
+    activeGuideStep.value = null
+  }, 2500)
+}
+
+function downloadFlowExample() {
+  const blob = new Blob([n8nFlowExample.value], { type: "application/json;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = "osd-flow-full.json"
+  a.click()
+  URL.revokeObjectURL(url)
+  copyToast.value = { show: true, message: "ดาวน์โหลดไฟล์ flow แล้ว" }
+}
+
+onMounted(async () => {
+  try {
+    const response = await fetch(flowFilePath)
+    if (!response.ok) throw new Error("flow-load-failed")
+    n8nFlowExample.value = await response.text()
+  } catch {
+    n8nFlowExample.value = "{\n  \"error\": \"โหลดไฟล์ flow ไม่สำเร็จ\"\n}"
+  }
+})
+</script>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

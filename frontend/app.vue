@@ -48,6 +48,11 @@ const logout = async () => {
 const base = (useRuntimeConfig().public as any).basePath || '/'
 const route = useRoute()
 
+const isFreshieMicrosite = computed(() => {
+  const p = route.path
+  return p === '/freshie-frame' || p.endsWith('/freshie-frame')
+})
+
 // Determine logo link based on current route
 // If on /ai-gateway page, go to home (/)
 // If on other AI Gateway pages, go to /ai-gateway
@@ -59,7 +64,7 @@ const logoLink = computed(() => {
     return '/'
   }
   // Check if we're in other AI Gateway related pages
-  const aiGatewayPages = ['/request', '/keys', '/status', '/docs', '/api-playground', '/about', '/admin']
+  const aiGatewayPages = ['/request', '/keys', '/status', '/docs', '/api-playground', '/chatbot', '/about', '/admin']
   const isInAiGatewaySection = aiGatewayPages.some(page => path.startsWith(page))
   return isInAiGatewaySection ? '/ai-gateway' : '/'
 })
@@ -67,6 +72,7 @@ const logoLink = computed(() => {
 // ปุ่มกลับ: หน้า index (/) ไม่แสดง, หน้า ai-gateway กลับไป /, หน้าอื่นกลับไป /ai-gateway
 const showBackButton = computed(() => {
   const path = route.path
+  if (path === '/freshie-frame' || path.endsWith('/freshie-frame')) return false
   return path !== '/' && !path.startsWith('/login') && !path.startsWith('/callback')
 })
 const backLink = computed(() => {
@@ -114,9 +120,13 @@ useHead(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-white">
+  <div
+    class="bg-white"
+    :class="isFreshieMicrosite ? 'h-dvh max-h-dvh overflow-hidden' : 'min-h-screen'"
+  >
     <!-- Header: โปร่งใสบนสุด → เบลอเมื่อเลื่อน -->
     <header
+      v-if="!isFreshieMicrosite"
       class="sticky top-0 z-50 pt-2 pb-2 transition-[background,backdrop-filter] duration-300"
       :class="headerScrolled ? 'bg-white/70 backdrop-blur-md shadow-[0_4px_20px_-6px_rgba(0,0,0,0.06)]' : 'bg-transparent'"
     >
@@ -160,15 +170,18 @@ useHead(() => {
       </div>
     </header>
 
-    <!-- Nuxt component -->
-    <main class="min-h-screen pb-8">
+    <main v-if="!isFreshieMicrosite" class="min-h-screen pb-8">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <NuxtPage />
       </div>
     </main>
+    <main v-else class="h-dvh overflow-hidden">
+      <NuxtPage />
+    </main>
 
-    <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200">
+    <footer
+      v-if="!isFreshieMicrosite"
+      class="bg-white border-t border-gray-200">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div class="flex flex-col md:flex-row justify-between items-center gap-4">
           <div class="flex items-center space-x-2">
@@ -184,8 +197,7 @@ useHead(() => {
       </div>
     </footer>
 
-    <!-- Chatbot Component -->
-    <ClientOnly>
+    <ClientOnly v-if="!isFreshieMicrosite">
       <Chatbot />
     </ClientOnly>
   </div>

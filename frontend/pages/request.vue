@@ -152,7 +152,7 @@
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
 							</svg>
 							<span class="text-sm font-medium text-green-800 dark:text-green-200">
-								ระบบจะกำหนดค่าเริ่มต้นเครดิตที่ 5 เครดิต สำหรับ API Key นี้
+								ระบบจะกำหนดค่าเริ่มต้นเครดิตที่ {{ defaultInitialCredit }} เครดิต สำหรับ API Key นี้
 							</span>
 						</div>
 					</div>
@@ -215,6 +215,17 @@ const form = ref({
 const submitting = ref(false);
 const router = useRouter();
 
+const DEFAULT_CREDIT_STORAGE_KEY = 'ubu_default_initial_credit'
+const defaultInitialCredit = ref(1)
+function loadDefaultCredit() {
+	if (typeof window === 'undefined') return
+	try {
+		const v = localStorage.getItem(DEFAULT_CREDIT_STORAGE_KEY)
+		const n = Number(v)
+		if (Number.isInteger(n) && n >= 1) defaultInitialCredit.value = n
+	} catch {}
+}
+
 const fetchCurrentUser = async () => {
 	try {
     const apiBase = useRuntimeConfig().public.apiBase as string
@@ -276,7 +287,7 @@ const submitRequest = async () => {
 			method: 'POST',
 			body: {
 				...form.value,
-				creditLimit: 5 // Default 5 credits
+				creditLimit: defaultInitialCredit.value
 			},
 			credentials: 'include'
 		})
@@ -313,18 +324,21 @@ const submitRequest = async () => {
     }
     // Redirect to keys page to view pending request
     router.push('/keys')
-	} catch (error) {
+	} catch (error: any) {
 		console.error('Error submitting request:', error)
+		const data = error?.data || error?.response?.data
+		const isMaxKeysReached = data?.error === 'max_keys_reached'
+		const message = data?.message || (isMaxKeysReached ? 'คุณมี API Key ครบจำนวนที่กำหนดแล้ว ไม่สามารถขอเพิ่มได้' : 'กรุณาลองใหม่อีกครั้ง')
 		try {
 			const Swal = (await import('sweetalert2')).default
 			await Swal.fire({
-				icon: 'error',
-				title: 'ส่งคำขอล้มเหลว',
-				text: 'กรุณาลองใหม่อีกครั้ง',
+				icon: isMaxKeysReached ? 'warning' : 'error',
+				title: isMaxKeysReached ? 'ขอ API Key เพิ่มไม่ได้' : 'ส่งคำขอล้มเหลว',
+				text: message,
 				confirmButtonText: 'ปิด'
 			})
 		} catch {
-			showToast('error', 'เกิดข้อผิดพลาดในการส่งคำขอ กรุณาลองใหม่อีกครั้ง')
+			showToast('error', message)
 		}
 	} finally {
 		submitting.value = false;
@@ -332,6 +346,7 @@ const submitRequest = async () => {
 };
 
 onMounted(() => {
+	loadDefaultCredit()
 	fetchCurrentUser()
 })
 

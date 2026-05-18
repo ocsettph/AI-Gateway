@@ -1,6 +1,28 @@
-import { defineNuxtRouteMiddleware, navigateTo, useRuntimeConfig } from 'nuxt/app'
+import { defineNuxtRouteMiddleware, navigateTo, useRuntimeConfig, abortNavigation } from 'nuxt/app'
+
+const LEGACY_PREFIX = '/ai_gateway'
+const PRODUCTION_ORIGIN = 'https://aigateway.ubu.ac.th'
 
 export default defineNuxtRouteMiddleware(async (to) => {
+  // ไม่ใช้ URL dev2.ubu.ac.th/ai_gateway/ — ส่งไป production เลย (ใช้ replace เพื่อให้ redirect จริง)
+  if (import.meta.client) {
+    const host = window.location.hostname
+    if (host === 'dev2.ubu.ac.th') {
+      const path = to.path === '/' ? '' : to.path
+      const search = (to.query && Object.keys(to.query).length)
+        ? '?' + new URLSearchParams(to.query as Record<string, string>).toString()
+        : ''
+      window.location.replace(`${PRODUCTION_ORIGIN}${path}${search}`)
+      return abortNavigation()
+    }
+  }
+
+  // ลิงก์เก่าในอีเมลชี้ไปที่ /ai_gateway/admin/requests — redirect ไป path จริง (เก็บ query)
+  if (to.path.startsWith(LEGACY_PREFIX + '/') || to.path === LEGACY_PREFIX) {
+    const pathWithoutPrefix = to.path === LEGACY_PREFIX ? '/' : to.path.slice(LEGACY_PREFIX.length) || '/'
+    return navigateTo({ path: pathWithoutPrefix, query: to.query }, { replace: true })
+  }
+
   // ป้องกัน loop ใต้ base เช่น /ai_gateway/
   const base = (useRuntimeConfig().public as any).basePath || '/'
   // แก้เคสที่ path ถูกเติม base ซ้ำ เช่น /ai_gateway/ai_gateway/...
@@ -29,7 +51,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   // หน้า public (ไม่ตรวจล็อกอิน)
   const publicPages = new Set<string>([
-    '/', '/about', '/callback', '/login', '/docs', '/models', '/api-playground'
+    '/', '/about', '/callback', '/login', '/docs', '/models', '/api-playground', '/freshie-frame'
   ])
   if (publicPages.has(path)) return
 

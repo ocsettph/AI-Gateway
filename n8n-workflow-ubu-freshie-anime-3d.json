@@ -1,0 +1,132 @@
+{
+  "name": "UBU Freshie Anime 3D (via AI Gateway)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ตั้งค่า\n\n1. **AI Gateway** → Authorization = `Bearer ubu_xxx` (ปิด Expression)\n2. โมเดล: `google/gemini-2.5-flash-image`\n3. modalities: `[image, text]` + max_tokens 8192\n4. Gateway retry ว่างอัตโนมัติ 3 ครั้ง (restart backend)\n5. Save → Activate",
+        "height": 480,
+        "width": 420,
+        "color": 6
+      },
+      "id": "5b85eeae-15c4-441f-b520-e7f4c63c438a",
+      "name": "คู่มือ",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1696, -48]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ubu-freshie-anime-3d",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "171ddec3-14f7-43b0-9726-6874fabade67",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [2128, 224],
+      "webhookId": "ubu-freshie-anime-3d"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst p =\n  j.body && typeof j.body === 'object' && !Array.isArray(j.body) && j.body.photo\n    ? j.body\n    : j;\n\nconst b64 = p.photo?.contentBase64;\nif (!b64) throw new Error('photo.contentBase64 missing');\n\nconst buf = Buffer.from(String(b64).replace(/^data:[^;]+;base64,/i, ''), 'base64');\nconst fileName = String(p.photo?.name || 'upload.jpg');\nconst mimeType = p.photo?.mimeType || 'image/jpeg';\nconst rawB64 = buf.toString('base64');\n\nconst prompt =\n  String(p.prompt || '').trim() ||\n  'Transform this portrait into a high-quality 3D anime character style, clean lighting, soft skin, expressive eyes, keep face likeness, single person, portrait framing, no text, no watermark';\n\nreturn [\n  {\n    json: {\n      event: p.event || 'ubu_freshie_anime_3d',\n      style: p.style || '3d_anime',\n      prompt,\n      fileName,\n      mimeType,\n      imageDataUrl: `data:${mimeType};base64,${rawB64}`\n    }\n  }\n];"
+      },
+      "id": "11f648a2-078b-4ef7-a283-eb8a04248c35",
+      "name": "เตรียมรูป",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2368, 224]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst model = 'google/gemini-2.5-flash-image';\nconst prompt =\n  String(item.prompt || '').trim() ||\n  'Transform this portrait into a high-quality 3D anime character style, keep face likeness, single person, portrait framing, no text, no watermark';\n\nreturn [\n  {\n    json: {\n      ...item,\n      gatewayBody: {\n        model,\n        modalities: ['image', 'text'],\n        max_tokens: 8192,\n        messages: [\n          {\n            role: 'user',\n            content: [\n              { type: 'image_url', image_url: { url: item.imageDataUrl } },\n              { type: 'text', text: prompt }\n            ]\n          }\n        ],\n        image_config: {\n          aspect_ratio: '1:1'\n        }\n      }\n    }\n  }\n];"
+      },
+      "id": "5a31648e-61e0-4181-8f7c-132ff94b1f58",
+      "name": "สร้าง request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2608, 224]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://aigateway.ubu.ac.th/api/v1/chat/completions",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer ubu_REPLACE_WITH_YOUR_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.gatewayBody) }}",
+        "options": {
+          "timeout": 180000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "http-ai-gateway",
+      "name": "AI Gateway",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2848, 224],
+      "notes": "แก้ Header Authorization: ปิด Expression → Bearer ubu_คีย์จริง (ห้าม $env)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst prep = $('เตรียมรูป').first().json;\n\nif (res?.error || res?.errorMessage) {\n  const err = res.errorMessage || res.message || res.error?.message || JSON.stringify(res.error || res).slice(0, 400);\n  return [{ json: { error: 'ai_gateway_http_error', message: String(err) } }];\n}\n\nfunction pickImageUrl(msg) {\n  if (!msg) return null;\n  const images = msg.images;\n  if (images?.length) {\n    return images[0]?.image_url?.url || images[0]?.imageUrl?.url || null;\n  }\n  const c = msg.content;\n  if (typeof c === 'string' && /^data:image\\//i.test(c.trim())) return c.trim();\n  if (Array.isArray(c)) {\n    for (const p of c) {\n      if (p?.type === 'image_url' && p?.image_url?.url) return p.image_url.url;\n      if (typeof p?.text === 'string' && /^data:image\\//i.test(p.text.trim())) return p.text.trim();\n    }\n  }\n  return null;\n}\n\nconst choice = res?.choices?.[0];\nconst msg = choice?.message;\nconst url = pickImageUrl(msg);\nif (!url) {\n  const usage = res?.usage || {};\n  const finish = choice?.finish_reason || choice?.native_finish_reason;\n  let hint = res?.error?.message || res?.message || '';\n  if (!hint) {\n    hint = `Gemini ตอบว่าง (finish=${finish ?? 'null'}, in=${usage.prompt_tokens ?? 0}, out=${usage.completion_tokens ?? 0}) — ลอง Generate อีกครั้ง`;\n  }\n  return [{ json: { error: 'ai_gateway_no_images', message: 'ระบบ AI ยังไม่ส่งรูปกลับมา — กรุณากด Generate 3D อีกครั้ง' } }];\n}\n\nlet imageBase64 = url;\nlet mimeType = 'image/png';\n\nif (String(url).startsWith('data:')) {\n  const m = String(url).match(/^data:([^;]+);base64,(.+)$/i);\n  if (m) {\n    mimeType = m[1];\n    imageBase64 = m[2];\n  }\n} else if (String(url).startsWith('http')) {\n  return [{ json: { error: 'http_url_unsupported', message: 'Model returned http URL — use data URL or add download node' } }];\n}\n\nreturn [\n  {\n    json: {\n      imageBase64,\n      mimeType,\n      style: prep.style || '3d_anime'\n    }\n  }\n];"
+      },
+      "id": "f9b9b6b0-040d-4796-b11e-610f5da810a9",
+      "name": "ดึงรูปผลลัพธ์",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3088, 224]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.imageBase64 ? { imageBase64: $json.imageBase64, mimeType: $json.mimeType || 'image/png', style: $json.style } : { error: $json.error || 'freshie_anime_failed', message: $json.message || 'AI Gateway did not return an image' } }}",
+        "options": {}
+      },
+      "id": "de4e3104-77cc-4379-b7f8-7097e021a1ba",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3328, 224]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "เตรียมรูป", "type": "main", "index": 0 }]]
+    },
+    "เตรียมรูป": {
+      "main": [[{ "node": "สร้าง request", "type": "main", "index": 0 }]]
+    },
+    "สร้าง request": {
+      "main": [[{ "node": "AI Gateway", "type": "main", "index": 0 }]]
+    },
+    "AI Gateway": {
+      "main": [[{ "node": "ดึงรูปผลลัพธ์", "type": "main", "index": 0 }]]
+    },
+    "ดึงรูปผลลัพธ์": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true },
+  "tags": []
+}

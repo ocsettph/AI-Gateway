@@ -92,6 +92,70 @@
             </div>
           </div>
         </div>
+
+        <!-- Default Initial Credit -->
+        <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+          <div class="flex items-center gap-2 mb-4">
+            <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+            </svg>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">กำหนดค่าเริ่มต้นเครดิต</h3>
+          </div>
+          <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-gray-700 dark:to-gray-800 rounded-lg p-4 md:p-5">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">เครดิตเริ่มต้นสำหรับ API Key ใหม่ (เครดิต)</label>
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                @click="decrementDefaultCredit"
+                :disabled="defaultInitialCredit <= 1"
+                class="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-gray-600 border-2 border-green-200 dark:border-gray-500 text-gray-700 dark:text-gray-200 font-bold text-lg hover:bg-green-100 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                −
+              </button>
+              <span class="min-w-[3rem] text-center text-xl font-bold text-gray-900 dark:text-white">{{ defaultInitialCredit }}</span>
+              <button
+                type="button"
+                @click="incrementDefaultCredit"
+                class="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-gray-600 border-2 border-green-200 dark:border-gray-500 text-gray-700 dark:text-gray-200 font-bold text-lg hover:bg-green-100 dark:hover:bg-gray-500 transition-all"
+              >
+                +
+              </button>
+            </div>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">ค่าที่ตั้งจะใช้เป็นเครดิตเริ่มต้นเมื่อมีคำขอ API Key ใหม่</p>
+          </div>
+        </div>
+
+        <!-- Max API Keys per User -->
+        <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+          <div class="flex items-center gap-2 mb-4">
+            <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">กำหนดจำนวน API Key ต่อ User</h3>
+          </div>
+          <div class="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-700 dark:to-gray-800 rounded-lg p-4 md:p-5">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">จำนวน API Key สูงสุดที่แต่ละผู้ใช้ขอได้</label>
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                @click="decrementMaxKeysPerUser"
+                :disabled="maxApiKeysPerUser <= 1"
+                class="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-gray-600 border-2 border-amber-200 dark:border-gray-500 text-gray-700 dark:text-gray-200 font-bold text-lg hover:bg-amber-100 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                −
+              </button>
+              <span class="min-w-[3rem] text-center text-xl font-bold text-gray-900 dark:text-white">{{ maxApiKeysPerUser }}</span>
+              <button
+                type="button"
+                @click="incrementMaxKeysPerUser"
+                class="w-10 h-10 flex items-center justify-center rounded-lg bg-white dark:bg-gray-600 border-2 border-amber-200 dark:border-gray-500 text-gray-700 dark:text-gray-200 font-bold text-lg hover:bg-amber-100 dark:hover:bg-gray-500 transition-all"
+              >
+                +
+              </button>
+            </div>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">ถ้าผู้ใช้มี API Key ครบจำนวนนี้แล้ว จะขอเพิ่มไม่ได้</p>
+          </div>
+        </div>
       </div>
 
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
@@ -345,6 +409,38 @@ const selected = ref<any>(null)
 const editingNames = ref<Record<number, string>>({})
 const autoDisableDays = ref(30)
 const savingSettings = ref(false)
+const maxApiKeysPerUser = ref(1)
+const savingMaxKeys = ref(false)
+
+const DEFAULT_CREDIT_STORAGE_KEY = 'ubu_default_initial_credit'
+const defaultInitialCredit = ref(1)
+
+function loadDefaultCredit() {
+  if (typeof window === 'undefined') return
+  try {
+    const v = localStorage.getItem(DEFAULT_CREDIT_STORAGE_KEY)
+    const n = Number(v)
+    if (Number.isInteger(n) && n >= 1) defaultInitialCredit.value = n
+  } catch {}
+}
+
+function persistDefaultCredit() {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(DEFAULT_CREDIT_STORAGE_KEY, String(defaultInitialCredit.value))
+  } catch {}
+}
+
+function incrementDefaultCredit() {
+  defaultInitialCredit.value += 1
+  persistDefaultCredit()
+}
+
+function decrementDefaultCredit() {
+  if (defaultInitialCredit.value <= 1) return
+  defaultInitialCredit.value -= 1
+  persistDefaultCredit()
+}
 const runningAutoDisable = ref(false)
 const usagePercent = computed(() => {
   if (!selected.value) return 0
@@ -470,9 +566,42 @@ async function loadSettings() {
     if (res.settings?.auto_disable_inactive_days?.value) {
       autoDisableDays.value = Number(res.settings.auto_disable_inactive_days.value)
     }
+    if (res.settings?.max_api_keys_per_user?.value) {
+      const v = Number(res.settings.max_api_keys_per_user.value)
+      if (v >= 1) maxApiKeysPerUser.value = v
+    }
   } catch (e) {
     console.error('Error loading settings:', e)
   }
+}
+
+async function persistMaxKeysPerUser() {
+  savingMaxKeys.value = true
+  try {
+    await $fetch(buildApiPath('admin/settings'), {
+      method: 'PATCH',
+      credentials: 'include',
+      body: { key: 'max_api_keys_per_user', value: maxApiKeysPerUser.value }
+    })
+  } catch (e: any) {
+    try {
+      const Swal = (await import('sweetalert2')).default
+      await Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: e?.data?.message || e?.message })
+    } catch {}
+  } finally {
+    savingMaxKeys.value = false
+  }
+}
+
+function incrementMaxKeysPerUser() {
+  maxApiKeysPerUser.value += 1
+  persistMaxKeysPerUser()
+}
+
+function decrementMaxKeysPerUser() {
+  if (maxApiKeysPerUser.value <= 1) return
+  maxApiKeysPerUser.value -= 1
+  persistMaxKeysPerUser()
 }
 
 async function saveSettings() {
@@ -590,6 +719,7 @@ async function runAutoDisable() {
 }
 
 onMounted(async () => {
+  loadDefaultCredit()
   await loadSettings()
   await fetchKeys()
 })

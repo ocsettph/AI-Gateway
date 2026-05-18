@@ -30,23 +30,28 @@
           <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Admin Dashboard</h2>
           <div v-if="!isAdmin" class="text-gray-500 dark:text-gray-400 text-sm">สำหรับผู้ดูแลระบบเท่านั้น</div>
           <div v-else>
-            <div class="mb-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div class="mb-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
               <input 
                 v-model="adminSearchQuery" 
                 type="text" 
                 placeholder="ค้นหาชื่อหรืออีเมล..." 
-                class="flex-1 px-3 py-2 border rounded dark:bg-gray-700 dark:text-white text-sm"
+                class="flex-1 min-w-0 sm:min-w-[140px] px-3 py-2 border rounded dark:bg-gray-700 dark:text-white text-sm"
                 @input="loadOverview"
               />
               <select 
                 v-model="adminFilterFaculty" 
-                class="px-3 py-2 border rounded dark:bg-gray-700 dark:text-white text-sm"
+                class="w-full sm:w-auto min-w-0 px-3 py-2 border rounded dark:bg-gray-700 dark:text-white text-sm"
                 @change="loadOverview"
               >
                 <option value="">ทั้งหมด</option>
                 <option v-for="faculty in facultyOptions" :key="faculty" :value="faculty">{{ faculty }}</option>
               </select>
-              <button @click="loadOverview" class="px-3 py-1 text-xs sm:text-sm bg-indigo-600 text-white rounded whitespace-nowrap">รีเฟรช</button>
+              <div class="flex flex-wrap gap-2 flex-shrink-0">
+                <button @click="loadOverview" class="px-3 py-1.5 text-xs sm:text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 whitespace-nowrap">รีเฟรช</button>
+                <NuxtLink to="/admin/dashboard" class="inline-block px-3 py-1.5 text-xs sm:text-sm bg-green-600 text-white rounded hover:bg-green-700 text-center whitespace-nowrap">
+                  ดูสถิติและกราฟ
+                </NuxtLink>
+              </div>
             </div>
             <div class="overflow-x-auto -mx-4 md:mx-0">
               <table class="min-w-full text-sm">
@@ -86,50 +91,6 @@
           </div>
         </div>
 			</div>
-
-      <!-- Model usage statistics (separate card) -->
-      <div v-if="isAdmin" class="mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">สถิติการใช้งานตาม Model</h3>
-        <div class="mb-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs sm:text-sm">
-          <label class="whitespace-nowrap">Model</label>
-          <input v-model="filterModel" placeholder="เช่น openai/gpt-4o" class="flex-1 px-2 py-1 border rounded dark:bg-gray-700 dark:text-white" />
-          <label class="whitespace-nowrap">ตั้งแต่</label>
-          <input type="date" v-model="adminStart" class="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white" />
-          <label class="whitespace-nowrap">ถึง</label>
-          <input type="date" v-model="adminEnd" class="px-2 py-1 border rounded dark:bg-gray-700 dark:text-white" />
-          <button @click="loadModelsUsage" class="px-3 py-1 bg-indigo-600 text-white rounded whitespace-nowrap">กรอง</button>
-        </div>
-        <div v-if="modelsUsageLoading" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">กำลังโหลด...</div>
-        <div v-else class="overflow-x-auto -mx-4 md:mx-0">
-          <table class="min-w-full text-sm">
-            <thead class="text-left text-gray-600 dark:text-gray-300">
-              <tr>
-                <th class="py-2 pr-4">ผู้ใช้</th>
-                <th class="py-2 pr-4">คณะ</th>
-                <th class="py-2 pr-4">API</th>
-                <th class="py-2 pr-4">Model</th>
-                <th class="py-2 pr-4">Calls</th>
-                <th class="py-2 pr-4">Tokens (in/out)</th>
-                <th class="py-2 pr-4">Cost (USD)</th>
-              </tr>
-            </thead>
-            <tbody class="text-gray-900 dark:text-gray-100">
-              <tr v-for="row in modelsUsage" :key="row.api_name + row.model + row.fullname" class="border-t border-gray-200 dark:border-gray-700">
-                <td class="py-2 pr-4">{{ row.fullname || '-' }}</td>
-                <td class="py-2 pr-4">{{ row.faculty || '-' }}</td>
-                <td class="py-2 pr-4">{{ row.api_name || '-' }}</td>
-                <td class="py-2 pr-4">{{ row.model || '-' }}</td>
-                <td class="py-2 pr-4">{{ row.calls }}</td>
-                <td class="py-2 pr-4">{{ row.tokens_in }} / {{ row.tokens_out }}</td>
-                <td class="py-2 pr-4">${{ money(row.cost_usd) }}</td>
-              </tr>
-              <tr v-if="!modelsUsage || modelsUsage.length===0">
-                <td colspan="7" class="py-4 text-center text-gray-500 dark:text-gray-400">ไม่มีข้อมูลสถิติในช่วงที่เลือก</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
 
 			<!-- Recent Incidents -->
             <div class="mt-8 text-xs text-gray-500 dark:text-gray-400">อัปเดตล่าสุด: {{ serverTimeFmt }}</div>
@@ -242,12 +203,6 @@ const userUsageData = ref<any>({ keys: [], total: {} })
 const usageLoading = ref(false)
 const filterStart = ref<string>('')
 const filterEnd = ref<string>('')
-// Admin model usage
-const adminStart = ref<string>('')
-const adminEnd = ref<string>('')
-const filterModel = ref<string>('')
-const modelsUsage = ref<any[]>([])
-const modelsUsageLoading = ref(false)
 // Admin search and filter
 const adminSearchQuery = ref<string>('')
 const adminFilterFaculty = ref<string>('')
@@ -412,22 +367,4 @@ async function loadUserUsage() {
   }
 }
 
-async function loadModelsUsage() {
-  if (!isAdmin.value) return
-  modelsUsageLoading.value = true
-  try {
-    const apiBase = useRuntimeConfig().public.apiBase as string
-    const params: any = {}
-    if (adminStart.value) params.start = adminStart.value
-    if (adminEnd.value) params.end = adminEnd.value
-    if (filterModel.value) params.model = filterModel.value
-    const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
-    const res = await $fetch(buildApiPath('admin/usage/models'), { params, credentials: 'include' }) as any
-    modelsUsage.value = res?.items || []
-  } catch {
-    modelsUsage.value = []
-  } finally {
-    modelsUsageLoading.value = false
-  }
-}
 </script>
