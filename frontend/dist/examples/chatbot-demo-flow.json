@@ -1,0 +1,3266 @@
+{
+  "name": "มหาวิทยาลัยตัวอย่าง — Chatbot Popup Demo Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "### 📚 Load Data Flow (มหาวิทยาลัยตัวอย่าง)\n\n**เตรียมข้อมูล Qdrant จากเว็บ/เอกสารแต่ละหน่วยงาน**\n1. ตั้งค่า Qdrant + OpenAI Embeddings credentials\n2. อัปโหลด PDF/เอกสารจากเว็บคณะ-สำนัก ลง Google Drive\n3. แก้ folder ID ในโหนด Download แต่ละหมวด\n4. รัน Load Data เพื่อสร้าง collection:\n   - EduPortal_Admissions, Registrar, Graduate, Curriculum\n   - Internship, GeneralEd, Campus, FAQ, IT\n   - Q_edu_departments (ทำเนียบเว็บหน่วยงาน)\n5. ตรวจ collection ครบก่อนเปิด Chat",
+        "height": 3324,
+        "width": 2428,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -5296,
+        -2128
+      ],
+      "typeVersion": 1,
+      "id": "de0fb725-89a7-4fa0-afb9-14413e83119f",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput || $json.body?.message?.text || \"สวัสดี\" }}",
+        "options": {
+          "systemMessage": "คุณคือ \"ยูบิ\" (Ubie) มาสคอต AI ผู้ช่วยประจำ \"มหาวิทยาลัยตัวอย่าง\" (Demo University Portal)\n⚠️ นี่คือระบบเดโม — ไม่ใช่ข้อมูลมหาวิทยาลัยจริง\n\n**บทบาทหลัก:** ช่วยนักศึกษา บุคลากร และผู้สนใจค้นหาข้อมูลจาก **เว็บไซต์แต่ละหน่วยงาน** (คณะ สำนัก ศูนย์) และตอบคำถามด้านการศึกษา\n\n**[พฤติกรรม Multi-Tool]**\n- เรียกหลาย Tool ได้ถ้าคำถามครอบคลุมหลายหน่วยงาน\n- ถาม \"เว็บคณะ...\" \"ติดต่อสำนัก...\" \"หน่วยงานไหนดูแล...\" → **Tool_Departments ก่อนเสมอ**\n- ถามรับสมัคร TCAS โควตา → Tool_Admissions\n- ถามลงทะเบียน ค่าเทอม ปฏิทิน → Tool_Registrar\n- ถามป.โท ป.เอก วิทยานิพนธ์ → Tool_Graduate\n- ถามหลักสูตร มคอ. → Tool_Curriculum\n- ถามฝึกงาน สหกิจ → Tool_Internship\n- ถามวิชา GE แผนการเรียน → Tool_GeneralEd\n- ถามอาคาร แผนที่วิทยาเขต → Tool_Campus\n- ถามอีเมล WiFi ระบบ IT → Tool_ITServices\n- ไม่พบใน Tool หลัก → Tool_FAQ แล้วค่อย Tool_Web_Search\n\n**[กฎเลือกเครื่องมือ]**\n1. Tool_Departments — เว็บไซต์/ติดต่อคณะ สำนัก หน่วยงาน (dept_website_directory)\n2. Tool_Admissions — งานรับเข้านักศึกษา\n3. Tool_Registrar — งานทะเบียนและปฏิทินการศึกษา\n4. Tool_Graduate — บัณฑิตศึกษา\n5. Tool_Curriculum — หลักสูตรและคู่มือ\n6. Tool_Internship — สหกิจศึกษา/ฝึกงาน\n7. Tool_GeneralEd — วิชาศึกษาทั่วไป\n8. Tool_Campus — อาคารและแผนที่วิทยาเขต (campus_map)\n9. Tool_ITServices — ระบบสารสนเทศและอีเมล\n10. Tool_FAQ — คำถามพบบ่อยส่วนกลาง\n11. Tool_Web_Search — ค้นเว็บ https://demo-university.example.edu เมื่อข้อมูลในระบบไม่พอ\n\n**[รูปแบบการตอบ]**\n- ปรับภาษาตามผู้ใช้\n- แทนตัวเองว่า \"ยูบิ\" หรือ \"หนู\" ลงท้าย \"ค่ะ/คะ\"\n- ถ้ามี URL เว็บหน่วยงาน ให้ใส่ลิงก์ดิบใน answer\n- ระบุ source ทุกแหล่ง (เช่น \"อ้างอิงจาก: เว็บคณะวิศวกรรมศาสตร์ และ งานทะเบียน\")\n- ตอบเป็น JSON เท่านั้น (ห้ามใส่ ```json):\n{\n  \"mascot\": \"Ubie\",\n  \"expression\": \"happy/thinking/searching/sorry/welcome\",\n  \"answer\": \"เนื้อหาคำตอบ...\",\n  \"source\": \"อ้างอิงจาก: [แหล่งข้อมูล]\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        -1328,
+        -2080
+      ],
+      "id": "26fe8e41-9df8-46b3-a73e-bb2f302907b1",
+      "name": "AI Agent",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "openai/gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "openai/gpt-4.1-mini"
+        },
+        "options": {
+          "topP": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -2656,
+        -1760
+      ],
+      "id": "e57fc819-c38b-46bc-884f-0220886e93bd",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "DzNma6rDM8OJUc04",
+          "name": "มหาวิทยาลัยตัวอย่าง Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "### 🔍 Retriever Flow — หน่วยงาน/เว็บไซต์\n\nAI Agent เรียก Tool ตามหน่วยงาน:\n- **Tool_Departments** — เว็บไซต์คณะ/สำนัก/หน่วยงาน ⭐\n- **Tool_Admissions** — รับสมัครนักศึกษา\n- **Tool_Registrar** — ทะเบียน/ปฏิทิน\n- **Tool_Graduate** — บัณฑิตศึกษา\n- **Tool_Curriculum** — หลักสูตร\n- **Tool_Internship** — สหกิจ/ฝึกงาน\n- **Tool_GeneralEd** — วิชา GE\n- **Tool_Campus** — อาคาร/แผนที่\n- **Tool_ITServices** — อีเมล/WiFi/IT\n- **Tool_FAQ** — คำถามพบบ่อย",
+        "height": 2108,
+        "width": 1780,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2384,
+        -2400
+      ],
+      "typeVersion": 1,
+      "id": "6d45df9d-515b-49ad-ac4e-ebad894242a1",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "### ⚙️ AI Gateway\n\nตั้งค่า credentials:\n- OpenAI / OpenRouter\n- Qdrant API\n- Google Drive & Sheets (ทำเนียบเว็บหน่วยงาน)\n- Tavily (ค้นเว็บสำรอง)",
+        "height": 1600,
+        "width": 432,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2832,
+        -2128
+      ],
+      "id": "51c5a9ac-51ee-45f5-afa3-d6baa135b7ce",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "### 🧠 Knowledge Base\n\nธีมเดโม: **มหาวิทยาลัยตัวอย่าง**\n- เน้นข้อมูลจาก **เว็บไซต์แต่ละหน่วยงาน** (คณะ สำนัก ศูนย์)\n- ไม่ใช่ข้อมูลมหาวิทยาลัยจริง\n- แทนที่ไฟล์ต้นทางด้วย PDF/Sheet ของคุณ\n- ชื่อ collection ต้องตรงกับ Tool nodes",
+        "height": 1440,
+        "width": 816,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2320,
+        -1808
+      ],
+      "id": "ff7a71b0-6647-409b-b716-81920364352c",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "model": "openai/text-embedding-3-large",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -2656,
+        -1520
+      ],
+      "id": "66b80b65-2c01-4cd3-aca4-e4ad495e41f9",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "QqVFkDv7r80Ktp04",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 🎓 Chatbot Popup Demo — มหาวิทยาลัยตัวอย่าง\n\n**วิธีใช้งาน (Quick Start)**\n1. Import workflow เข้า n8n\n2. ตั้งค่า credentials ทุกโหนด 🔑\n3. เตรียม Google Sheet ทำเนียบเว็บหน่วยงาน (คอลัมน์: ชื่อหน่วยงาน, URL, โทร, อีเมล)\n4. รัน Load Data flow index ข้อมูลแต่ละหน่วยงาน\n5. Activate workflow → คัดลอก Webhook URL\n6. วาง URL ในโค้ดติดตั้งจากหน้า Chatbot Sandbox\n\n**ทดสอบถาม**\n- \"เว็บคณะวิศวกรรมคืออะไร\"\n- \"สำนักทะเบียนเปิดกี่โมง\"\n- \"ลงทะเบียนเมื่อไหร่\"\n- \"อีเมลนักศึกษาใช้ยังไง\"\n\n**JSON ตอบกลับ:** `{ mascot, expression, answer, source }`",
+        "height": 3776,
+        "width": 5076,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -5680,
+        -2496
+      ],
+      "id": "7e9f37f6-4959-4e72-8f26-84994b470eda",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "operation": "createCollection",
+        "collectionName": "Q_edu_departments",
+        "vectors": "{\n  \"size\": 3072,\n  \"distance\": \"Cosine\"\n}",
+        "shardNumber": {},
+        "replicationFactor": {},
+        "writeConsistencyFactor": {},
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-qdrant.qdrant",
+      "typeVersion": 1,
+      "position": [
+        -1664,
+        544
+      ],
+      "id": "aa5410d4-f47c-447c-b7b5-abb9b619eed7",
+      "name": "Create Collection",
+      "credentials": {
+        "qdrantRestApi": {
+          "id": "ggNZXpHPFHw5u4CY",
+          "name": "QdrantApi account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "## Qdrant Setup\n\nCollections:\n`EduPortal_Admissions` `EduPortal_Registrar` `EduPortal_Graduate`\n`EduPortal_Curriculum` `EduPortal_Internship` `EduPortal_GeneralEd`\n`EduPortal_Campus` `EduPortal_FAQ` `EduPortal_IT`\n`Q_edu_departments` ← ทำเนียบเว็บหน่วยงาน\n\nลบ collection เก่าก่อน re-index ถ้าข้อมูลเปลี่ยน",
+        "height": 480,
+        "width": 640,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1728,
+        416
+      ],
+      "id": "d727aee7-9c82-4bd9-bc3c-0b2c111a8e78",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "operation": "deleteCollection",
+        "collectionName": {
+          "__rl": true,
+          "value": "Q_edu_departments",
+          "mode": "list",
+          "cachedResultName": "Q_edu_departments"
+        },
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-qdrant.qdrant",
+      "typeVersion": 1,
+      "position": [
+        -1456,
+        544
+      ],
+      "id": "79db3f1d-ff32-4997-bc60-38372ec48586",
+      "name": "Delete Collection",
+      "credentials": {
+        "qdrantRestApi": {
+          "id": "ggNZXpHPFHw5u4CY",
+          "name": "QdrantApi account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "getCollection",
+        "collectionName": {
+          "__rl": true,
+          "value": "rTindor_2026",
+          "mode": "list",
+          "cachedResultName": "rTindor_2026"
+        },
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-qdrant.qdrant",
+      "typeVersion": 1,
+      "position": [
+        -1264,
+        544
+      ],
+      "id": "ea485d02-6268-4673-a3bb-956555013e33",
+      "name": "Get Collection",
+      "credentials": {
+        "qdrantRestApi": {
+          "id": "ggNZXpHPFHw5u4CY",
+          "name": "QdrantApi account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3152,
+        -2048
+      ],
+      "id": "79d5b73e-6d62-411c-a291-9b8c9571d7f6",
+      "name": "Recursive Character Text Splitter1"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3488,
+        -2048
+      ],
+      "id": "6896c3f5-90e1-40f8-88d1-61b9e89e0d96",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -4992,
+        -2048
+      ],
+      "id": "08733fc2-52da-4f01-862a-b4854b34e287",
+      "name": "Download file",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3168,
+        -1680
+      ],
+      "id": "8f35dba0-f100-4b6f-9584-a2d8cb3c6674",
+      "name": "Recursive Character Text Splitter"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "fileName",
+                "value": "={{ $json.name }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3504,
+        -1680
+      ],
+      "id": "9b8b3469-2e6f-4df8-8f3c-0b69b14f13aa",
+      "name": "Default Data Loader1"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5008,
+        -1680
+      ],
+      "id": "c5d58802-878b-4d62-a21c-538c00e880b0",
+      "name": "Download file1",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3168,
+        -1344
+      ],
+      "id": "88173d91-d1d7-4bde-99d2-f2562cbfb9ef",
+      "name": "Recursive Character Text Splitter2"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "fileName",
+                "value": "={{ $json.name }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3504,
+        -1344
+      ],
+      "id": "2583083a-33a7-47f1-ac89-b8545b09a172",
+      "name": "Default Data Loader2"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5008,
+        -1344
+      ],
+      "id": "1a51e70e-78ba-4740-9bf2-86439f1c9d65",
+      "name": "Download file2",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3168,
+        -1024
+      ],
+      "id": "c4273bb7-1d46-4170-b05a-778f0cd0ad9b",
+      "name": "Recursive Character Text Splitter3"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3504,
+        -1024
+      ],
+      "id": "0c0d9392-b37f-4f61-a5f7-51862f331c19",
+      "name": "Default Data Loader3"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5008,
+        -1008
+      ],
+      "id": "267cf143-f388-4d9b-90a0-8a842fa32719",
+      "name": "Download file3",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3168,
+        -704
+      ],
+      "id": "72731dac-6159-4dc1-85c2-9a832ca63822",
+      "name": "Recursive Character Text Splitter4"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3504,
+        -704
+      ],
+      "id": "4f87efb6-59e5-47b7-b744-b79b8e8e1f98",
+      "name": "Default Data Loader4"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5008,
+        -704
+      ],
+      "id": "2b14aa51-21ec-44c5-8458-11f302cddd40",
+      "name": "Download file4",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3168,
+        -512
+      ],
+      "id": "640f3bb7-9f09-4fc9-9aac-57c31d4469fd",
+      "name": "Recursive Character Text Splitter5"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3504,
+        -512
+      ],
+      "id": "c4f91df9-1d95-46b5-bcab-5061d6bc8c79",
+      "name": "Default Data Loader5"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5024,
+        -384
+      ],
+      "id": "f14ef469-3eeb-4d0b-ad32-41ca91326644",
+      "name": "Download file5",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4464,
+        -2048
+      ],
+      "id": "6548c444-962a-4de8-b3da-843164c09be7",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4480,
+        -1680
+      ],
+      "id": "9a81de7d-c5de-4cd6-8257-ef89545edd8a",
+      "name": "Extract from File1"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4496,
+        -384
+      ],
+      "id": "51e83347-1418-4398-b0bf-b31fa219cbd5",
+      "name": "Extract from File2"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4480,
+        -1344
+      ],
+      "id": "a396b25c-c990-4fbd-8b0a-b0a2d4d583ea",
+      "name": "Extract from File3"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4480,
+        -1008
+      ],
+      "id": "3188db92-36b7-45da-bafb-528e16612e9c",
+      "name": "Extract from File4"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4496,
+        -704
+      ],
+      "id": "724cb8b6-843b-4634-b12b-ac599989a6e8",
+      "name": "Extract from File5"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "ยินดีต้อนรับสู่ มหาวิทยาลัยตัวอย่าง! 🎓\nนี่คือน้องยูบิ ผู้ช่วยค้นหาข้อมูลและเว็บไซต์หน่วยงานต่างๆ (เดโม)",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -2336,
+        -2336
+      ],
+      "id": "da3d96c0-f201-4491-88c0-5c107e4f5484",
+      "name": "When chat message received",
+      "webhookId": "f80778cf-c9b6-495a-88a9-e7ed43ef8fa7"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5232,
+        -2048
+      ],
+      "id": "06739b8d-c6f4-4bd5-97a8-42176db8d92d",
+      "name": "Admissions",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5248,
+        -1680
+      ],
+      "id": "d7b81fb5-8718-4c44-8704-f7d5d2a312e4",
+      "name": "Registrar",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5248,
+        -1344
+      ],
+      "id": "46518394-7491-4ea4-8c8e-f0dcdb331937",
+      "name": "Graduate",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5248,
+        -1008
+      ],
+      "id": "2d00f62b-1226-45af-a896-b9e6facfee38",
+      "name": "Curriculum",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5248,
+        -704
+      ],
+      "id": "1ccdba10-cfa6-4403-ae5b-128f3aefc3a5",
+      "name": "Internship",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5248,
+        -384
+      ],
+      "id": "9370452a-3848-47fe-b01d-0d597191655b",
+      "name": "GeneralEd",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3168,
+        -192
+      ],
+      "id": "fa0ed887-ce52-40ee-9014-0bb7c6415762",
+      "name": "Recursive Character Text Splitter6"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3504,
+        -192
+      ],
+      "id": "3e6df759-2759-4f17-92d3-e3922118c773",
+      "name": "Default Data Loader6"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5024,
+        -64
+      ],
+      "id": "292fe640-edd6-47bc-86a9-7185bd5f9746",
+      "name": "Download file6",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4480,
+        -64
+      ],
+      "id": "94dc1388-4e53-4121-9e23-e97a8c496279",
+      "name": "Extract from File6"
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3168,
+        128
+      ],
+      "id": "b201a28e-e64d-4f2b-b42d-70d1f344605f",
+      "name": "Recursive Character Text Splitter7"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3504,
+        128
+      ],
+      "id": "87db608c-70f5-46dc-a884-18ecc056e4a9",
+      "name": "Default Data Loader7"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5024,
+        256
+      ],
+      "id": "b2929331-be5d-4ba6-899e-a75f39e2c09e",
+      "name": "Download file7",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4480,
+        256
+      ],
+      "id": "9c704161-e1f4-4382-b532-6ac41ec83169",
+      "name": "Extract from File7"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5248,
+        -64
+      ],
+      "id": "7761a842-d67f-48d1-b90e-a616e522007c",
+      "name": "Campus",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5248,
+        256
+      ],
+      "id": "de854776-3759-42b4-adfb-7b82b9a81238",
+      "name": "FAQ",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Admissions",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Admissions"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3888,
+        -2048
+      ],
+      "id": "2028f035-3240-424b-ba83-6d070729f6ef",
+      "name": "Q_Admissionss",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Registrar",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Registrar"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3904,
+        -1680
+      ],
+      "id": "78962e3d-0bd5-40c8-ac66-3fba435147eb",
+      "name": "Q_Registrar",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Graduate",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Graduate"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3904,
+        -1344
+      ],
+      "id": "c56523b4-1d5c-4060-9d47-4f4194f2c76f",
+      "name": "Q_Graduate",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Curriculum",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Curriculum"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3920,
+        -1008
+      ],
+      "id": "10951bcb-2251-4c3c-abe0-2cc9008321d6",
+      "name": "Q_Curriculum",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Internship",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Internship"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3920,
+        -704
+      ],
+      "id": "26dc09f6-8eb5-4bcf-85f1-9beeb80a94bc",
+      "name": "Q_Internship",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_GeneralEd",
+          "mode": "list",
+          "cachedResultName": "EduPortal_GeneralEd"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3936,
+        -384
+      ],
+      "id": "1482a300-f216-40ac-b3cd-337d35102e8d",
+      "name": "Q_GeneralEd",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Campus",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Campus"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3936,
+        -64
+      ],
+      "id": "a9d52cbc-be2d-4d20-aeaa-5d5dbc0855ec",
+      "name": "Q_Campus",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_FAQ",
+          "mode": "list",
+          "cachedResultName": "EduPortal_FAQ"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3936,
+        256
+      ],
+      "id": "89f634dd-50fb-4018-b382-e1d908993ed7",
+      "name": "Q_FAQ",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "สั่งกาแฟ/เบเกอรี่ออนไลน์ Pickup หรือ Delivery, เวลารอคิว, สถานะออเดอร์, วิธีชำระเงิน และโปรสั่งครั้งแรก",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Admissions",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Admissions"
+        },
+        "topK": 10,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -1696
+      ],
+      "id": "0955606e-95e0-40d2-afba-04e2ab5b8aa2",
+      "name": "Tool_Admissionss",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "ปฏิทินการศึกษา วันเปิด-ปิดภาคเรียน ลงทะเบียน ค่าเทอม การขอเอกสาร และข้อมูลจากเว็บสำนักทะเบียน",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Registrar",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Registrar"
+        },
+        "topK": 10,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -1584
+      ],
+      "id": "87ea4f38-485a-4b81-989c-52d805fedb61",
+      "name": "Tool_Registrar",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "ระดับบัณฑิตศึกษา ป.โท-เอก อาจารย์ที่ปรึกษา วิทยานิพนธ์ และข้อมูลจากเว็บบัณฑิตวิทยาลัย",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Graduate",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Graduate"
+        },
+        "topK": 10,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -1472
+      ],
+      "id": "468065d3-b526-470b-a981-b88f5d97b653",
+      "name": "Tool_Graduate",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "หลักสูตรแต่ละสาขา คู่มือนักศึกษา มคอ. และข้อมูลจากเว็บสำนักวิชาการ/หลักสูตร",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Curriculum",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Curriculum"
+        },
+        "topK": 10,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -1360
+      ],
+      "id": "6bdb3487-6a80-4756-9b1d-47a43281f538",
+      "name": "Tool_Curriculum",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "สหกิจศึกษา ฝึกงาน อาจารย์นิเทศ และข้อมูลจากเว็บสำนักสหกิจ",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Internship",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Internship"
+        },
+        "topK": 10,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -1248
+      ],
+      "id": "d08e5afc-4bb8-46d6-ac2d-37e908ffc01e",
+      "name": "Tool_Internship",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "วิชาศึกษาทั่วไป (GE) แผนการเรียน รายวิชาพื้นฐาน และข้อมูลจากเว็บศูนย์ GE",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_GeneralEd",
+          "mode": "list",
+          "cachedResultName": "EduPortal_GeneralEd"
+        },
+        "topK": 10,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -1136
+      ],
+      "id": "5ef9240b-fb73-4f8e-aaa4-c79a2825eb85",
+      "name": "Tool_GeneralEd",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "อาคารเรียน ห้องประชุม แผนผังวิทยาเขต ที่จอดรถ และข้อมูลจากเว็บอาคารสถานที่",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_Campus",
+          "mode": "list",
+          "cachedResultName": "EduPortal_Campus"
+        },
+        "topK": 10,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -1024
+      ],
+      "id": "d89f0be3-7302-4929-9030-f48986e1ff24",
+      "name": "Tool_Campus",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "คำถามที่พบบ่อย ช่องทางติดต่อส่วนกลาง เบอร์โทรสำนักงานอธิการบดี (ด่านรองก่อนค้นเว็บ)",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_FAQ",
+          "mode": "list",
+          "cachedResultName": "EduPortal_FAQ"
+        },
+        "topK": 10,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -912
+      ],
+      "id": "7d79ccb3-a714-4203-8d6b-3fc3c8c9f521",
+      "name": "Tool_FAQ",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5248,
+        640
+      ],
+      "id": "04338c72-3d0d-4c40-99d5-609b2ba57d2e",
+      "name": "ITServicesServices",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3184,
+        688
+      ],
+      "id": "cf21b3be-13bd-4dd9-a5c8-8afdc7e44346",
+      "name": "Recursive Character Text Splitter8"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3552,
+        672
+      ],
+      "id": "937f7ed5-59c9-470f-a0a0-55e91e2a0cb3",
+      "name": "Default Data Loader8"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5056,
+        640
+      ],
+      "id": "21bfb307-77fa-4bc1-ab35-e4c409854956",
+      "name": "Download file8",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4480,
+        640
+      ],
+      "id": "8e3eb15d-62e7-4d2c-86aa-bd1e653bf065",
+      "name": "Extract from File8"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_ITServices",
+          "mode": "list",
+          "cachedResultName": "EduPortal_ITServices"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3920,
+        640
+      ],
+      "id": "3d10c3c6-0f1a-4e39-832d-ef4ee6ad746c",
+      "name": "Q_ITServicesServicesServices",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "แอป มหาวิทยาลัยตัวอย่าง การสมัครสมาชิก สแกนสะสมแต้ม แจ้งปัญหาแอป และการเชื่อมบัตรเครดิต",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "EduPortal_ITServices",
+          "mode": "list",
+          "cachedResultName": "EduPortal_ITServices"
+        },
+        "topK": 10,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -784
+      ],
+      "id": "21b469c3-da35-468a-951d-139037f0aac5",
+      "name": "Tool_ITServicesServicesServices",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// กำหนดข้อความแจ้งปรับปรุงระบบโดยตรง\nconst systemMaintenanceMessage = \"สวัสดีค่ะ ขณะนี้น้องยูบิอยู่ระหว่างปรับปรุงระบบชั่วคราว ขออภัยในความไม่สะดวกนะคะ 🎓\";\nreturn [{\n  json: {\n    output: systemMaintenanceMessage,\n    mascot: \"Ubie\",\n    expression: \"sorry\",\n    answer: systemMaintenanceMessage,\n    source: \"ระบบฐานข้อมูล มหาวิทยาลัยตัวอย่าง (ปิดปรับปรุงชั่วคราว)\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        -2192
+      ],
+      "id": "a97e0ff5-680e-417b-a6ca-02cea0a849ca",
+      "name": "อยู่ระหว่างปรับปรุง",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ดึงข้อมูลดิบจาก AI Agent\nconst raw = $json.output ?? $json.answer ?? $json.text ?? \"\";\nlet parsed = {};\n\n// ตรวจสอบและ Parse JSON\nif (typeof raw === \"string\") {\n  // ลบ Markdown Code Block ออกถ้ามี\n  const cleaned = raw.replace(/^```json\\s*/i, \"\").replace(/```$/i, \"\").trim();\n  try { \n    parsed = JSON.parse(cleaned); \n  } catch (e) { \n    // ถ้าไม่ใช่ JSON ให้เก็บค่าเป็น text ปกติ\n    parsed = { answer: cleaned }; \n  }\n} else {\n  parsed = raw;\n}\n\n// กำหนดเงื่อนไข Expression (ต้องตรงกับที่ยูบิใช้)\nconst allow = [\"happy\", \"thinking\", \"searching\", \"sorry\", \"welcome\"];\nconst expression = (parsed.expression && allow.includes(parsed.expression.toLowerCase()))\n  ? parsed.expression.toLowerCase()\n  : \"happy\"; // เปลี่ยน Default เป็น happy เพื่อความสดใส\n\n// ดึงเนื้อหาคำตอบ\nlet answer = parsed.answer || parsed.output || \"ยูบิขออภัยครับ ไม่พบข้อมูลที่ท่านต้องการ\";\n\n// ==========================================\n// ส่วนที่เพิ่มเข้ามา: ฟังก์ชันแปลง URL ให้เป็นลิงก์ที่กดได้ (Markdown)\n// ==========================================\nif (typeof answer === \"string\") {\n  // RegExp สำหรับดึง URL ที่ขึ้นต้นด้วย http:// หรือ https://\n  const urlRegex = /(https?:\\/\\/[^\\s]+)/g;\n  \n  answer = answer.replace(urlRegex, function(url) {\n    // ป้องกันกรณีที่ URL แอบติดเครื่องหมายวรรคตอนท้ายประโยคมาด้วย\n    let cleanUrl = url;\n    let suffix = \"\";\n    if (url.endsWith(\")\") || url.endsWith(\"]\") || url.endsWith(\".\")) {\n      cleanUrl = url.slice(0, -1);\n      suffix = url.slice(-1);\n    }\n    // แปลงเป็นรูปแบบ [ลิงก์](url) เพื่อให้ Chat UI แสดงผลเป็นคลิกได้\n    return `[คลิกที่นี่เพื่อไปยังลิงก์](${cleanUrl})${suffix}`;\n  });\n}\n// ==========================================\n\n// แก้ไขชื่อมาสคอตหลักเป็น Ubie\nconst mascot = parsed.mascot || \"Ubie\";\n\n// แหล่งที่มาข้อมูล\nconst source = parsed.source || \"ฐานข้อมูลมหาวิทยาลัยตัวอย่าง\";\n\nreturn [{\n  json: {\n    output: answer,   // แสดงผลในหน้า Chat หลัก (ตอนนี้จะมี Markdown ลิงก์แล้ว)\n    mascot: mascot,   // ชื่อมาสคอต (Ubie)\n    expression: expression, // ท่าทาง\n    answer: answer,   // เนื้อหาคำตอบ\n    source: source    // แหล่งอ้างอิง\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        -1984
+      ],
+      "id": "cd3dc0c0-c54a-407e-a975-9d9c1b50d623",
+      "name": "sentjson",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// แกะและจัดฟอร์แมตข้อมูลส่งกลับไปแสดงผลบน Chat UI\nconst raw = $json.output ?? $json.answer ?? $json.text ?? \"\";\nlet parsed = {};\n\nif (typeof raw === \"string\") {\n  // ล้าง Markdown Tag ที่ AI อาจหลุดแถมมาออกให้เกลี้ยง\n  let cleaned = raw.replace(/^```json\\s*/i, \"\").replace(/```\\s*$/i, \"\").trim();\n  try { \n    parsed = JSON.parse(cleaned); \n  } catch (e) {\n    // แผนสำรองกรณีปีกกาซ้อน\n    const jsonMatch = cleaned.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      try { parsed = JSON.parse(jsonMatch[0]); } catch (err) { parsed = { answer: cleaned }; }\n    } else {\n      parsed = { answer: cleaned };\n    }\n  }\n} else {\n  parsed = raw;\n}\n\nconst allow = [\"happy\", \"thinking\", \"searching\", \"sorry\", \"welcome\"];\nconst expression = (parsed.expression && allow.includes(parsed.expression.toLowerCase()))\n  ? parsed.expression.toLowerCase()\n  : \"happy\";\n\nlet answer = parsed.answer || parsed.output || \"ยูบิขออภัยค่ะ ไม่พบข้อมูลที่ต้องการ\";\n\n// แปลงข้อความ URL สดให้เป็นลิงก์ Markdown [คลิกที่นี่...]\nif (typeof answer === \"string\") {\n  const urlRegex = /(https?:\\/\\/[^\\s]+)/g;\n  answer = answer.replace(urlRegex, function(url) {\n    let cleanUrl = url;\n    let suffix = \"\";\n    if (url.endsWith(\")\") || url.endsWith(\"]\") || url.endsWith(\".\")) {\n      cleanUrl = url.slice(0, -1);\n      suffix = url.slice(-1);\n    }\n    return `[คลิกที่นี่เพื่อไปยังลิงก์](${cleanUrl})${suffix}`;\n  });\n}\n\nreturn [{\n  json: {\n    output: answer, // ตัวแปรหลักที่ Chat UI นำไปพิมพ์แสดงผลบนจอ\n    mascot: parsed.mascot || \"Ubie\",\n    expression: expression,\n    answer: answer,\n    source: parsed.source || \"ฐานข้อมูลมหาวิทยาลัยตัวอย่าง\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        -2352
+      ],
+      "id": "7ddd13f4-8645-4f57-a2aa-4ea0d3552715",
+      "name": "Format Output & Link Converter"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ดึงข้อความจากฝั่ง User\nconst chatInput = $json.chatInput || $json.body?.message?.text || \"\";\n\n// คลังคำต้องห้ามที่ชอบใช้แฮกหรือหลอกให้คาย System Prompt\nconst forbiddenKeywords = [\n  \"system prompt\", \"system message\", \"ignore previous instructions\", \n  \"you are now\", \"คำสั่งระบบ\", \"ถอดรหัส\", \"พิมพ์ข้อความด้านบนทั้งหมด\", \n  \"ignore above\", \"developer mode\", \"jailbreak\", \"พิมพ์คำสั่งระบบ\",\n  \"ข้ามคำสั่ง\", \"จงลืมคำสั่ง\", \"system_prompt\", \"คายข้อความ\"\n];\n\nconst lowerInput = chatInput.toLowerCase();\nconst isAttack = forbiddenKeywords.some(keyword => lowerInput.includes(keyword));\n\nif (isAttack) {\n  return [{\n    json: {\n      isBlocked: true,\n      output: \"ยูบิไม่สามารถทำตามคำสั่งนี้ได้ค่ะ หากมีคำถามเกี่ยวกับมหาวิทยาลัยตัวอย่าง สอบถามมาได้เลยนะคะ! 💛\",\n      mascot: \"Ubie\",\n      expression: \"sorry\",\n      answer: \"ยูบิไม่สามารถทำตามคำสั่งนี้ได้ค่ะ หากมีคำถามเกี่ยวกับมหาวิทยาลัยตัวอย่าง สอบถามมาได้เลยนะคะ! 💛\",\n      source: \"ระบบรักษาความปลอดภัยเครือข่าย\"\n    }\n  }];\n}\n\nreturn [{ json: { chatInput: chatInput, isBlocked: false } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2096,
+        -2336
+      ],
+      "id": "cd429746-b1bc-4e36-a2a6-1503ade41297",
+      "name": "blocked1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "357fad71-a5d7-42e6-a287-2fc13e227e4d",
+              "leftValue": "={{ $json.isBlocked }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1872,
+        -2336
+      ],
+      "id": "07d11314-28c6-46a8-838d-59098c0a6dd0",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "chunkSize": 3000,
+        "chunkOverlap": 250,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -3168,
+        992
+      ],
+      "id": "e68208b5-648b-4e06-a2f9-42e4b96663db",
+      "name": "Recursive Character Text Splitter9"
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -3536,
+        976
+      ],
+      "id": "224a136f-a928-4310-9604-d0af16e9b5f2",
+      "name": "Default Data Loader9"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{$json.id}}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain",
+              "drawingsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5040,
+        960
+      ],
+      "id": "64e5130b-e807-44c8-aab3-1d7be5a5bf76",
+      "name": "Download file9",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4480,
+        960
+      ],
+      "id": "93344931-0e4e-4af5-8ec6-fc959174f1e9",
+      "name": "Extract from File9"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "'YOUR_GOOGLE_DRIVE_FOLDER_ID' in parents",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -5232,
+        960
+      ],
+      "id": "fa623ebf-e071-48d7-8a2d-44d4fc6d6f3f",
+      "name": "Departments",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "veMGdd9j3DRXC5QT",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "Q_edu_departments",
+          "mode": "list",
+          "cachedResultName": "Q_edu_departments"
+        },
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -3904,
+        960
+      ],
+      "id": "bf31867c-641a-4cbc-9eea-e33699b3a0f5",
+      "name": "Q_edu_departments",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "ทำเนียบเว็บไซต์คณะ สำนัก หน่วยงาน — URL เบอร์โทร อีเมล Facebook ของแต่ละหน่วยงานในมหาวิทยาลัยตัวอย่าง",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "Q_edu_departments",
+          "mode": "list",
+          "cachedResultName": "Q_edu_departments"
+        },
+        "topK": 15,
+        "options": {
+          "contentPayloadKey": "text",
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        -2048,
+        -656
+      ],
+      "id": "625eb9ff-c9ca-4af9-b448-60580ae884e9",
+      "name": "Tool_Departments",
+      "credentials": {
+        "qdrantApi": {
+          "id": "Ueu8NEtPGADMTOXk",
+          "name": "QdrantApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = ($json.chatInput || $json.body?.message?.text || \"\").trim();\nconst q = query.toLowerCase();\n\nconst INTENT_MAP = {\n  DIRECT_HI: [\n    \"hi\", \"hello\", \"hey\", \"สวัสดี\", \"หวัดดี\", \"ดีจ้า\", \"ดีครับ\", \"ดีค่ะ\",\n    \"ฮัลโหล\", \"เฮลโล\", \"ทักทาย\", \"ยินดีที่ได้รู้จัก\", \"yo\", \"good morning\",\n    \"ยูบิช่วยหน่อย\", \"ช่วยหน่อย\", \"สอบถามหน่อย\", \"ขอถามหน่อย\"\n  ],\n  DIRECT_INFO: [\n    \"คณะ\", \"สำนัก\", \"หน่วยงาน\", \"ภาควิชา\", \"วิทยาลัย\", \"ศูนย์\",\n    \"เว็บ\", \"เว็บไซต์\", \"website\", \"url\", \"ลิงก์\", \"link\",\n    \"facebook\", \"fb\", \"เพจ\", \"line\",\n    \"โทร\", \"เบอร์\", \"email\", \"อีเมล\", \"@student\",\n    \"ที่อยู่\", \"location\", \"แผนที่\", \"map\", \"ติดต่อ\", \"ช่องทาง\"\n  ]\n};\n\nlet bestIntent = \"AI_FALLBACK\";\nlet bestScore = 0;\nfor (const [intent, keywords] of Object.entries(INTENT_MAP)) {\n  const score = keywords.filter(k => q.includes(k)).length;\n  if (score > bestScore) { bestScore = score; bestIntent = intent; }\n}\n\nconst COLLECTION_MAP = {\n  DIRECT_INFO: \"Q_edu_departments\",\n  DIRECT_HI: \"\",\n  AI_FALLBACK: \"EduPortal_Knowledge\"\n};\n\nconst SOURCE_MAP = {\n  DIRECT_INFO: \"ทำเนียบเว็บไซต์หน่วยงาน มหาวิทยาลัยตัวอย่าง\",\n  DIRECT_HI: \"ระบบต้อนรับอัตโนมัติ\",\n  AI_FALLBACK: \"ฐานข้อมูลกลาง มหาวิทยาลัยตัวอย่าง\"\n};\n\nreturn [{\n  json: {\n    chatInput: query || \"สวัสดี\",\n    query: query || \"สวัสดี\",\n    intent: bestIntent,\n    collection: COLLECTION_MAP[bestIntent] || \"\",\n    source: SOURCE_MAP[bestIntent] || \"ทำเนียบเว็บไซต์หน่วยงาน มหาวิทยาลัยตัวอย่าง\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2256,
+        -2080
+      ],
+      "id": "1cca6f9e-af40-4d0a-96c0-942cb615cfc8",
+      "name": "Intent Router"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput || $json.body?.message?.text || \"สวัสดี\" }}",
+        "options": {
+          "systemMessage": "คุณคือ \"ยูบิ\" (Ubie) ผู้ช่วยตอบข้อมูลหน่วยงานของ \"มหาวิทยาลัยตัวอย่าง\"\n\nหน้าที่: ตอบข้อมูลคณะ สำนัก หน่วยงาน — **เว็บไซต์ URL** เบอร์โทร อีเมล Facebook ที่ตั้ง จาก dept_website_directory เท่านั้น\nถ้าไม่พบ → Tool_Web_Search หรือ campus_map สำหรับแผนที่อาคาร\n\n[กฎการตอบ]\n- เน้นให้ลิงก์เว็บไซต์หน่วยงานที่ถูกต้อง\n- ตอบสั้น กระชับ\n- แทนตัวเองว่า \"ยูบิ\" ลงท้าย \"ค่ะ/คะ\"\n- ตอบเป็น JSON เท่านั้น:\n{\n  \"mascot\": \"Ubie\",\n  \"expression\": \"happy\",\n  \"answer\": \"...\",\n  \"source\": \"อ้างอิงจาก: ทำเนียบเว็บไซต์หน่วยงาน มหาวิทยาลัยตัวอย่าง\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        -1312,
+        -2288
+      ],
+      "id": "d44f4d35-1e0f-4d9b-a0eb-1cf97ebb4547",
+      "name": "AI Agent information",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "DIRECT_INFO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "direct-info-rule"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "DIRECT_HI",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "direct-hi-rule"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "5a140406-37c8-4c73-9180-8d5de1b9a16e",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "AI",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": 2
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1920,
+        -2096
+      ],
+      "id": "23865762-664c-4e19-a10e-905ec30cd6cf",
+      "name": "Route Switch"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"mascot\": \"Ubie\",\n  \"expression\": \"welcome\",\n  \"answer\": \"สวัสดีค่ะ! หนูชื่อ \\\"ยูบิ\\\" ผู้ช่วยของมหาวิทยาลัยตัวอย่าง 🎓 วันนี้อยากถามเรื่องเว็บหน่วยงาน การรับสมัคร ทะเบียน หรือระบบ IT ดีคะ?\",\n  \"source\": \"ระบบต้อนรับอัตโนมัติ\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1248,
+        -2448
+      ],
+      "id": "3b1c99ee-7aad-450e-8383-6be327a6af6f",
+      "name": "Edit Fields hi"
+    },
+    {
+      "parameters": {
+        "query": "={{ $json.chatInput || \"\" }}",
+        "options": {
+          "include_domains": [
+            "demo-university.example.edu"
+          ]
+        }
+      },
+      "type": "@tavily/n8n-nodes-tavily.tavilyTool",
+      "typeVersion": 1,
+      "position": [
+        -864,
+        -1632
+      ],
+      "id": "7151d555-2874-4445-b8ad-843aebc220ef",
+      "name": "WEB",
+      "credentials": {
+        "tavilyApi": {
+          "id": "gCVNDPyr968dA7sq",
+          "name": "Tavily account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_DOCUMENT_ID",
+          "mode": "list",
+          "cachedResultName": "มหาวิทยาลัยตัวอย่าง — คำถามที่พบบ่อย (FAQ)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_DOCUMENT_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1623856520,
+          "mode": "list",
+          "cachedResultName": "Departments",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_DOCUMENT_ID/edit#gid=1623856520"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -1184,
+        -1872
+      ],
+      "id": "8cdc7118-8404-499a-b862-11ef929500c1",
+      "name": "Get row(s) in sheet in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oXEovbuQEZl47LD2",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_DOCUMENT_ID",
+          "mode": "list",
+          "cachedResultName": "มหาวิทยาลัยตัวอย่าง — คำถามที่พบบ่อย (FAQ)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_DOCUMENT_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "registrar_calendar",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_DOCUMENT_ID/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -1040,
+        -1632
+      ],
+      "id": "44968bfd-4fcf-417c-acbb-f08846130d2a",
+      "name": "dept_website_directory",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oXEovbuQEZl47LD2",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "query": "https://www.demo-university.example.edu/campus_map_all.php",
+        "options": {}
+      },
+      "type": "@tavily/n8n-nodes-tavily.tavilyTool",
+      "typeVersion": 1,
+      "position": [
+        -736,
+        -1632
+      ],
+      "id": "df2868b9-4192-41f3-8f4e-a1d8ed3cfa07",
+      "name": "campus_map",
+      "credentials": {
+        "tavilyApi": {
+          "id": "gCVNDPyr968dA7sq",
+          "name": "Tavily account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "### 📖 คู่มือ Workflow เดโมมหาวิทยาลัย\n\n**หลัง Import ต้องทำ**\n1. เชื่อม credentials (OpenAI, Qdrant, Google, Tavily)\n2. เปลี่ยน `YOUR_GOOGLE_SHEET_DOCUMENT_ID` และ `YOUR_GOOGLE_DRIVE_FOLDER_ID`\n3. สร้าง Sheet **ทำเนียบเว็บหน่วยงาน** — แต่ละแถว = 1 หน่วยงาน (ชื่อ, URL, โทร, อีเมล, Facebook)\n4. อัปโหลดเอกสาร/PDF จากแต่ละหน่วยงานลง Google Drive แยกโฟลเดอร์\n5. Execute Load Data จนครบทุก collection\n6. Activate → นำ Webhook URL ไปใส่ Chatbot Sandbox\n\n**ตัวอย่างคำถาม**\n- \"เว็บคณะบริหารธุรกิจ\"\n- \"ติดต่อสำนักทะเบียนยังไง\"\n- \"ปฏิทินเปิดเทอมเมื่อไหร่\"\n- \"คณะไหนดูแลหลักสูตรคอมพิวเตอร์\"\n- \"WiFi นักศึกษาใช้ยังไง\"\n\n⚠️ เดโม \"มหาวิทยาลัยตัวอย่าง\" — ปรับชื่อหน่วยงาน/collection ให้ตรงกับมหาวิทยาลัยของคุณ",
+        "height": 520,
+        "width": 480,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -5600,
+        -2128
+      ],
+      "typeVersion": 1,
+      "id": "demo-usage-guide-note",
+      "name": "Usage Guide"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI Agent information",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Q_Admissionss",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_Admissionss",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Q_Registrar",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Q_Graduate",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Q_Curriculum",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Q_Internship",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Q_GeneralEd",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_Registrar",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_Graduate",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_Curriculum",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_Internship",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_GeneralEd",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Q_Campus",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Q_FAQ",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_Campus",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_FAQ",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Q_ITServicesServicesServices",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_ITServicesServicesServices",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Q_edu_departments",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Tool_Departments",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Output & Link Converter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter1": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_Admissionss",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader1",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader1": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_Registrar",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file1": {
+      "main": [
+        [
+          {
+            "node": "Extract from File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter2": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader2",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader2": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_Graduate",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file2": {
+      "main": [
+        [
+          {
+            "node": "Extract from File3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter3": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader3",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader3": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_Curriculum",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file3": {
+      "main": [
+        [
+          {
+            "node": "Extract from File4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter4": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader4",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader4": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_Internship",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file4": {
+      "main": [
+        [
+          {
+            "node": "Extract from File5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter5": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader5",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader5": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_GeneralEd",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file5": {
+      "main": [
+        [
+          {
+            "node": "Extract from File2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Q_Admissionss",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File1": {
+      "main": [
+        [
+          {
+            "node": "Q_Registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File2": {
+      "main": [
+        [
+          {
+            "node": "Q_GeneralEd",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File3": {
+      "main": [
+        [
+          {
+            "node": "Q_Graduate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File4": {
+      "main": [
+        [
+          {
+            "node": "Q_Curriculum",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File5": {
+      "main": [
+        [
+          {
+            "node": "Q_Internship",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "blocked1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admissions": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar": {
+      "main": [
+        [
+          {
+            "node": "Download file1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Graduate": {
+      "main": [
+        [
+          {
+            "node": "Download file2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Curriculum": {
+      "main": [
+        [
+          {
+            "node": "Download file3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Internship": {
+      "main": [
+        [
+          {
+            "node": "Download file4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GeneralEd": {
+      "main": [
+        [
+          {
+            "node": "Download file5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter6": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader6",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader6": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_Campus",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file6": {
+      "main": [
+        [
+          {
+            "node": "Extract from File6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File6": {
+      "main": [
+        [
+          {
+            "node": "Q_Campus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter7": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader7",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader7": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_FAQ",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file7": {
+      "main": [
+        [
+          {
+            "node": "Extract from File7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File7": {
+      "main": [
+        [
+          {
+            "node": "Q_FAQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campus": {
+      "main": [
+        [
+          {
+            "node": "Download file6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAQ": {
+      "main": [
+        [
+          {
+            "node": "Download file7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Admissions": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Registrar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Graduate": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Curriculum": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Internship": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_GeneralEd": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Campus": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_FAQ": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter8": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader8",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader8": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_ITServicesServicesServices",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file8": {
+      "main": [
+        [
+          {
+            "node": "Extract from File8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File8": {
+      "main": [
+        [
+          {
+            "node": "Q_ITServicesServicesServices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ITServices": {
+      "main": [
+        [
+          {
+            "node": "Download file8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_ITServices": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "blocked1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Format Output & Link Converter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Intent Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter9": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader9",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader9": {
+      "ai_document": [
+        [
+          {
+            "node": "Q_edu_departments",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file9": {
+      "main": [
+        [
+          {
+            "node": "Extract from File9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File9": {
+      "main": [
+        [
+          {
+            "node": "Q_edu_departments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Departments": {
+      "main": [
+        [
+          {
+            "node": "Download file9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_Departments": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent information",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Router": {
+      "main": [
+        [
+          {
+            "node": "Route Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent information": {
+      "main": [
+        [
+          {
+            "node": "Format Output & Link Converter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Switch": {
+      "main": [
+        [
+          {
+            "node": "AI Agent information",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields hi",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields hi": {
+      "main": [
+        [
+          {
+            "node": "Format Output & Link Converter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WEB": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent information",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "dept_website_directory": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent information",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "campus_map": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent information",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "fa234558-f7e2-4802-8404-5dce879ac1bf",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4dc127666738e721ea4c8cf5c71581e3a800b764f580b3b247fa47a8a4f6eba5"
+  },
+  "id": "tNknvcaucvPii8gq",
+  "tags": []
+}

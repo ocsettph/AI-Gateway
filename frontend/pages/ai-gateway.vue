@@ -48,12 +48,17 @@ onMounted(async () => {
     const me = await $fetch(mePath, { credentials: 'include' }) as any
     isAdmin.value = me?.user?.role === 'ADMIN'
     if (isAdmin.value) {
-      const adminPath = apiBase.endsWith('/api') || apiBase === '/api' 
-        ? `${apiBase}/admin/requests` 
-        : `${apiBase}/api/admin/requests`
-      const r = await $fetch(adminPath, { credentials: 'include' }) as any
-      const list = r?.requests || []
-      pendingCount.value = list.filter((x: any) => x.status === 'pending').length
+      const buildApiPath = (endpoint: string) =>
+        apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+
+      const [apiKeyRes, chatbotRes] = await Promise.all([
+        $fetch(buildApiPath('admin/requests'), { credentials: 'include' }) as Promise<{ requests?: any[] }>,
+        $fetch(buildApiPath('admin/chatbot-code-requests'), { credentials: 'include' }) as Promise<{ requests?: any[] }>
+      ])
+
+      const apiKeyPending = (apiKeyRes?.requests || []).filter((x: any) => x.status === 'pending').length
+      const chatbotPending = (chatbotRes?.requests || []).filter((x: any) => x.status === 'pending').length
+      pendingCount.value = apiKeyPending + chatbotPending
     }
   } catch (e) {
     console.error('Failed to fetch user data:', e)

@@ -4,7 +4,7 @@
       <section class="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-white p-6 md:p-8">
         <p class="text-sm font-semibold uppercase tracking-wide text-amber-700">Chatbot Popup Sandbox</p>
         <h1 class="mt-2 text-2xl font-bold text-gray-900 md:text-4xl">สร้างและทดสอบบอทได้ทันที</h1>
-        <p class="mt-2 text-sm text-gray-700">ตั้งค่า webhook, สี, รูปท่าทาง และลองแชทกับ popup preview แบบ realtime ในหน้าเดียว</p>
+        <p class="mt-2 text-sm text-gray-700">ตั้งค่า webhook, สี, รูปท่าทาง และลองแชทกับ popup preview ได้ทันที — พร้อมนำไปใช้งานจริงแล้วสามารถขอรับโค้ดติดตั้งและชุดมาสคอตได้</p>
       </section>
 
       <section class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -58,6 +58,7 @@
                   <span class="text-xs text-gray-600">BuaBan Mascot</span>
                 </button>
                 <button
+                  v-if="hasCodeAccess"
                   type="button"
                   class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50"
                   @click="downloadMascotPack"
@@ -66,6 +67,14 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
                   </svg>
                   ดาวน์โหลดชุดมาสคอต
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 transition hover:bg-amber-100"
+                  @click="openRequestPanel"
+                >
+                  ขอดาวน์โหลดชุดมาสคอต
                 </button>
                 <span class="text-xs text-gray-500">อัปโหลดไม่ถาวร (รีเฟรชแล้วหาย)</span>
               </div>
@@ -86,8 +95,8 @@
           </div>
         </article>
 
-        <article class="rounded-2xl border border-gray-200 bg-white p-5">
-          <h3 class="text-base font-semibold text-gray-900">ขั้นตอนแบบคลิกตามได้เลย</h3>
+        <article ref="requestPanelRef" class="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 class="text-base font-semibold text-gray-900">ขั้นตอนทดสอบ (เปิดให้ทุกคน)</h3>
           <div class="mt-3 space-y-2">
             <button type="button" @click="goToGuideStep('webhook')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
               1) กรอก Webhook URL
@@ -104,21 +113,101 @@
             <button type="button" @click="goToGuideStep('preview')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
               5) เปิด Popup Preview และลองคุยจริง
             </button>
-            <button type="button" @click="goToGuideStep('flow')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
-              6) ตัวอย่าง n8n Flow (ตามชุด OSD)
-            </button>
-            <button type="button" @click="goToGuideStep('install')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
-              7) Copy โค้ดไปปลั๊กเว็บของคุณ
-            </button>
+            <template v-if="hasCodeAccess">
+              <button type="button" @click="goToGuideStep('flow')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
+                6) ตัวอย่าง n8n Flow (Demo)
+              </button>
+              <button type="button" @click="goToGuideStep('install')" class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-100">
+                7) Copy โค้ดไปปลั๊กเว็บของคุณ
+              </button>
+            </template>
           </div>
-          <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
+
+          <div v-if="hasCodeAccess" class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3">
             <p class="text-xs font-medium text-blue-700">JSON Contract</p>
             <pre class="mt-2 overflow-x-auto text-xs text-blue-900">{{ schemaText }}</pre>
+          </div>
+
+          <div v-else class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div class="flex items-start gap-3">
+              <div class="rounded-full bg-amber-100 p-2 text-amber-700">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-amber-900">ขอรับโค้ดติดตั้งและเอกสารเทคนิค</p>
+                <p class="mt-1 text-xs text-amber-800">
+                  ทดสอบ webhook และ preview ได้เลย เมื่อพร้อมนำไปใช้งานจริง ส่งคำขอพร้อมบอกวัตถุประสงค์เพื่อรับโค้ดปลั๊กเว็บ ชุดมาสคอต และตัวอย่าง n8n
+                </p>
+
+                <div v-if="codeAccessStatus === 'unauthenticated'" class="mt-3">
+                  <NuxtLink to="/login" class="inline-flex rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700">
+                    เข้าสู่ระบบเพื่อส่งคำขอ
+                  </NuxtLink>
+                </div>
+
+                <div v-else-if="codeAccessStatus === 'pending'" class="mt-3 rounded-lg border border-amber-200 bg-white p-3">
+                  <p class="text-xs font-semibold text-amber-800">คำขอของคุณอยู่ระหว่างรออนุมัติ</p>
+                  <p v-if="latestCodeRequest?.project_name" class="mt-1 text-xs text-gray-600">โปรเจกต์: {{ latestCodeRequest.project_name }}</p>
+                  <p class="mt-1 text-xs text-gray-500">ผู้ดูแลระบบจะตรวจสอบและแจ้งผลทางอีเมลหรือระบบแจ้งเตือน</p>
+                </div>
+
+                <div v-else-if="codeAccessStatus === 'rejected'" class="mt-3 rounded-lg border border-rose-200 bg-white p-3">
+                  <p class="text-xs font-semibold text-rose-700">คำขอล่าสุดถูกปฏิเสธ</p>
+                  <p class="mt-1 text-xs text-gray-600">คุณสามารถส่งคำขอใหม่พร้อมรายละเอียดที่ชัดเจนขึ้นได้</p>
+                  <button type="button" class="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700" @click="showRequestForm = true">
+                    ส่งคำขอใหม่
+                  </button>
+                </div>
+
+                <div v-else-if="codeAccessStatus === 'none'" class="mt-3">
+                  <button type="button" class="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700" @click="showRequestForm = true">
+                    ขอรับโค้ดติดตั้ง
+                  </button>
+                </div>
+
+                <form v-if="showRequestForm && codeAccessStatus !== 'pending' && codeAccessStatus !== 'unauthenticated'" class="mt-4 space-y-3" @submit.prevent="submitCodeRequest">
+                  <label class="block space-y-1 text-xs">
+                    <span class="font-medium text-gray-700">ชื่อโปรเจกต์ / เว็บไซต์ที่จะใช้ *</span>
+                    <input v-model="requestForm.projectName" required type="text" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" placeholder="เช่น เว็บคณะวิศวกรรมศาสตร์" />
+                  </label>
+                  <label class="block space-y-1 text-xs">
+                    <span class="font-medium text-gray-700">URL เว็บไซต์ (ถ้ามี)</span>
+                    <input v-model="requestForm.websiteUrl" type="url" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" placeholder="https://example.ubu.ac.th" />
+                  </label>
+                  <label class="block space-y-1 text-xs">
+                    <span class="font-medium text-gray-700">ประเภทการใช้งาน *</span>
+                    <select v-model="requestForm.usageType" required class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100">
+                      <option value="">เลือกประเภท</option>
+                      <option value="เว็บหน่วยงาน">เว็บหน่วยงาน / คณะ</option>
+                      <option value="การเรียนการสอน">การเรียนการสอน</option>
+                      <option value="งานวิจัย">งานวิจัย / โปรเจกต์</option>
+                      <option value="บริการประชาชน">บริการประชาชน / FAQ</option>
+                      <option value="อื่นๆ">อื่นๆ</option>
+                    </select>
+                  </label>
+                  <label class="block space-y-1 text-xs">
+                    <span class="font-medium text-gray-700">จะนำไปใช้อย่างไร? *</span>
+                    <textarea v-model="requestForm.purpose" required rows="4" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" placeholder="อธิบายว่าจะใช้ chatbot ตอบคำถามอะไร ใครเป็นผู้ใช้งาน และจะติดตั้งที่ไหน..." />
+                  </label>
+                  <div class="flex flex-wrap gap-2">
+                    <button type="submit" :disabled="submittingRequest" class="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60">
+                      {{ submittingRequest ? 'กำลังส่ง...' : 'ส่งคำขอ' }}
+                    </button>
+                    <button type="button" class="rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-200" @click="showRequestForm = false">
+                      ยกเลิก
+                    </button>
+                  </div>
+                  <p v-if="requestError" class="text-xs text-rose-600">{{ requestError }}</p>
+                </form>
+              </div>
+            </div>
           </div>
         </article>
       </section>
 
-      <section class="grid gap-6 xl:grid-cols-[1fr_1fr]">
+      <section class="grid gap-6" :class="hasCodeAccess ? 'xl:grid-cols-[1fr_1fr]' : ''">
         <article ref="previewSectionRef" class="rounded-2xl border border-gray-200 bg-white p-5" :class="activeGuideStep === 'preview' ? 'ring-2 ring-amber-300' : ''">
           <div class="flex items-center justify-between">
             <div>
@@ -155,12 +244,19 @@
               <div class="flex-1 space-y-3 overflow-y-auto bg-gray-50 p-3">
                 <div class="flex gap-2">
                   <img :src="expressionImages.welcome" alt="welcome" class="h-8 w-8 rounded-full object-cover" />
-                  <div class="max-w-[82%] rounded-xl rounded-tl-none bg-white px-3 py-2 text-xs text-gray-800 shadow-sm">{{ config.welcomeMessage }}</div>
+                  <div class="max-w-[82%] rounded-xl rounded-tl-none bg-white px-3 py-2 text-xs text-gray-800 shadow-sm" v-html="parseMarkdownLinks(config.welcomeMessage)" />
                 </div>
                 <div v-for="(msg, idx) in messages" :key="idx" class="flex" :class="msg.role === 'user' ? 'justify-end' : 'justify-start'">
                   <div class="flex items-start gap-2" :class="msg.role === 'user' ? 'flex-row-reverse' : ''">
                     <img v-if="msg.role === 'assistant'" :src="currentMascotImage" alt="assistant" class="h-8 w-8 rounded-full object-cover" />
-                    <div class="max-w-[85%] rounded-xl px-3 py-2 text-xs shadow-sm" :class="msg.role === 'user' ? 'text-white' : 'bg-white text-gray-800'" :style="msg.role === 'user' ? { backgroundColor: config.headerColor } : undefined">{{ msg.content }}</div>
+                    <div
+                    class="max-w-[85%] rounded-xl px-3 py-2 text-xs shadow-sm"
+                    :class="msg.role === 'user' ? 'text-white' : 'bg-white text-gray-800'"
+                    :style="msg.role === 'user' ? { backgroundColor: config.headerColor } : undefined"
+                  >
+                    <span v-if="msg.role === 'user'">{{ msg.content }}</span>
+                    <span v-else v-html="parseMarkdownLinks(msg.content)" />
+                  </div>
                   </div>
                 </div>
                 <div v-if="sending" class="flex justify-start">
@@ -211,7 +307,7 @@
           </div>
         </article>
 
-        <article class="rounded-2xl border border-gray-200 bg-white p-5">
+        <article v-if="hasCodeAccess" class="rounded-2xl border border-gray-200 bg-white p-5">
           <h2 class="text-lg font-semibold text-gray-900">Live JSON Inspector</h2>
           <p class="mt-1 text-sm text-gray-600">ปรับค่าแล้วลองส่งแชทได้ทันที ถ้าต้องการทดสอบแบบ payload ให้วาง JSON ตรงนี้ได้เลย</p>
           <textarea v-model="payloadText" rows="8" class="mt-3 w-full rounded-xl border border-gray-300 px-3 py-2 font-mono text-xs outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
@@ -224,11 +320,11 @@
         </article>
       </section>
 
-      <section ref="flowSectionRef" class="rounded-2xl border border-gray-200 bg-white p-5 md:p-6" :class="activeGuideStep === 'flow' ? 'ring-2 ring-amber-300' : ''">
+      <section v-if="hasCodeAccess" ref="flowSectionRef" class="rounded-2xl border border-gray-200 bg-white p-5 md:p-6" :class="activeGuideStep === 'flow' ? 'ring-2 ring-amber-300' : ''">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 class="text-lg font-semibold text-gray-900">ตัวอย่าง n8n Flow (ตามชุด OSD)</h2>
-            <p class="text-sm text-gray-600">นำไปวางใน n8n import workflow ได้ และแก้ credentials/collection ตามระบบจริง</p>
+            <h2 class="text-lg font-semibold text-gray-900">ตัวอย่าง n8n Flow (Demo)</h2>
+            <p class="text-sm text-gray-600">ไฟล์ demo สำหรับนำไป import ใน n8n แล้วแก้ credentials / knowledge base ตามหน่วยงานของคุณ</p>
           </div>
           <div class="flex items-center gap-2">
             <button class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200" @click="copyFlowExample">Copy flow JSON</button>
@@ -238,7 +334,7 @@
         <pre class="mt-4 max-h-72 overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs">{{ n8nFlowExample }}</pre>
       </section>
 
-      <section ref="installSectionRef" class="rounded-2xl border border-gray-200 bg-white p-5 md:p-6" :class="activeGuideStep === 'install' ? 'ring-2 ring-amber-300' : ''">
+      <section v-if="hasCodeAccess" ref="installSectionRef" class="rounded-2xl border border-gray-200 bg-white p-5 md:p-6" :class="activeGuideStep === 'install' ? 'ring-2 ring-amber-300' : ''">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 class="text-lg font-semibold text-gray-900">วิธีนำไปปลั๊กกับเว็บ</h2>
@@ -314,12 +410,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, onUnmounted, ref } from "vue"
 import { useHead, useRuntimeConfig } from "nuxt/app"
 
 type Payload = { mascot: string; expression: string; answer: string; source: string }
 type Message = { role: "user" | "assistant"; content: string }
 type ExpressionKey = "happy" | "thinking" | "searching" | "sorry" | "welcome"
+type CodeAccessStatus = "loading" | "unauthenticated" | "none" | "pending" | "approved" | "rejected"
+type CodeRequest = {
+  id?: number
+  project_name?: string
+  website_url?: string
+  purpose?: string
+  usage_type?: string
+  status?: string
+}
 
 useHead({
   title: "Chatbot Popup Sandbox - UBU AI SERVICE",
@@ -327,13 +432,15 @@ useHead({
 })
 
 const base = (useRuntimeConfig().public as any).basePath || "/"
+const apiBase = useRuntimeConfig().public.apiBase as string
+const buildApiPath = (endpoint: string) => apiBase.endsWith("/api") || apiBase === "/api" ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
 const chatOpen = ref(true)
 const sending = ref(false)
 const inputMessage = ref("")
 const statusText = ref("พร้อมทดสอบ")
 const lastExpression = ref<ExpressionKey>("welcome")
 const activeGuideStep = ref<"webhook" | "profile" | "color" | "expression" | "preview" | "flow" | "install" | null>(null)
-const flowFilePath = "/examples/osd-flow-full.json"
+const flowFilePath = "/examples/chatbot-demo-flow.json"
 const n8nFlowExample = ref("กำลังโหลดไฟล์ flow...")
 const webhookInputRef = ref<HTMLInputElement | null>(null)
 const botNameInputRef = ref<HTMLInputElement | null>(null)
@@ -343,6 +450,19 @@ const expressionSectionRef = ref<HTMLElement | null>(null)
 const previewSectionRef = ref<HTMLElement | null>(null)
 const flowSectionRef = ref<HTMLElement | null>(null)
 const installSectionRef = ref<HTMLElement | null>(null)
+const requestPanelRef = ref<HTMLElement | null>(null)
+const codeAccessStatus = ref<CodeAccessStatus>("loading")
+const latestCodeRequest = ref<CodeRequest | null>(null)
+const showRequestForm = ref(false)
+const submittingRequest = ref(false)
+const requestError = ref("")
+const requestForm = ref({
+  projectName: "",
+  websiteUrl: "",
+  usageType: "",
+  purpose: ""
+})
+const hasCodeAccess = computed(() => codeAccessStatus.value === "approved")
 
 const config = ref({
   webhookUrl: "https://n8n.ubu.ac.th/webhook/f80778cf-c9b6-495a-88a9-e7ed43ef8fa7/chat",
@@ -379,9 +499,9 @@ const payloadText = ref(JSON.stringify(payload, null, 2))
 
 const schemaText = JSON.stringify(
   {
-    mascot: "บัวบาน",
+    mascot: "Ubie",
     expression: "ชื่อท่าทาง",
-    answer: "เนื้อหาคำตอบของคุณ...",
+    answer: "เนื้อหาคำตอบของคุณ... รองรับลิงก์แบบ [ข้อความ](https://example.com)",
     source: "ชื่อไฟล์หรือ URL"
   },
   null,
@@ -398,53 +518,68 @@ const installTabs = [
 ] as const
 
 const installSnippets = computed<Record<"html" | "node" | "php", string>>(() => ({
-  html: `<!-- วางโค้ดนี้ก่อน </body> ในไฟล์หน้าเว็บของคุณ -->
+  html: `<!-- วางโค้ดนี้ก่อน </body> ในไฟล์หน้าเว็บของคุณ (UI เดียวกับ Chatbot Sandbox) -->
 <style>
-  #ubu-chatbot { position: fixed; right: 20px; bottom: 20px; z-index: 2147483000; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  #ubu-chatbot .panel { width: 340px; height: 470px; background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; box-shadow: 0 20px 40px rgba(0,0,0,.15); display: flex; flex-direction: column; overflow: hidden; }
-  #ubu-chatbot .header { color: #fff; padding: 10px 12px; font-size: 14px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
-  #ubu-chatbot .body { flex: 1; overflow: auto; background: #f8fafc; padding: 10px; }
-  #ubu-chatbot .msg-row { display: flex; align-items: flex-end; gap: 8px; margin: 8px 0; }
-  #ubu-chatbot .msg-row.user { justify-content: flex-end; }
-  #ubu-chatbot .msg-row.bot { justify-content: flex-start; }
-  #ubu-chatbot .msg-avatar { width: 26px; height: 26px; border-radius: 999px; object-fit: cover; background: #fff; border: 1px solid #e5e7eb; flex: 0 0 auto; }
-  #ubu-chatbot .msg { max-width: 85%; margin: 0; padding: 8px 10px; border-radius: 12px; font-size: 13px; line-height: 1.35; white-space: pre-wrap; }
-  #ubu-chatbot .msg.bot { background: #fff; border: 1px solid #e5e7eb; color: #111827; }
-  #ubu-chatbot .msg.user { margin-left: auto; color: #fff; }
-  #ubu-chatbot .input { border-top: 1px solid #e5e7eb; padding: 8px; display: flex; gap: 6px; background: #fff; }
-  #ubu-chatbot .input input { flex: 1; border: 1px solid #d1d5db; border-radius: 8px; padding: 7px 9px; font-size: 13px; }
-  #ubu-chatbot .input button { border: 0; width: 34px; height: 34px; border-radius: 999px; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease; }
-  #ubu-chatbot .input button:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,.14); }
+  #ubu-chatbot { position: fixed; right: 16px; bottom: 16px; z-index: 2147483000; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  #ubu-chatbot .panel { position: fixed; right: 16px; bottom: 16px; width: 320px; height: 400px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 25px 50px rgba(0,0,0,.15); display: flex; flex-direction: column; overflow: hidden; }
+  #ubu-chatbot .header { color: #fff; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+  #ubu-chatbot .header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  #ubu-chatbot .header-avatar { width: 32px; height: 32px; border-radius: 999px; object-fit: cover; background: #fff; padding: 2px; flex: 0 0 auto; }
+  #ubu-chatbot .header-name { font-size: 12px; font-weight: 600; line-height: 1.2; }
+  #ubu-chatbot .header-expression { font-size: 10px; opacity: .9; line-height: 1.2; }
+  #ubu-chatbot .header-close { background: transparent; border: 0; color: #fff; cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 12px; }
+  #ubu-chatbot .header-close:hover { background: rgba(0,0,0,.2); }
+  #ubu-chatbot .body { flex: 1; overflow-y: auto; background: #f9fafb; padding: 12px; }
+  #ubu-chatbot .welcome-row, #ubu-chatbot .msg-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+  #ubu-chatbot .msg-row.user { justify-content: flex-end; flex-direction: row-reverse; }
+  #ubu-chatbot .msg-avatar { width: 32px; height: 32px; border-radius: 999px; object-fit: cover; flex: 0 0 auto; }
+  #ubu-chatbot .bubble { max-width: 85%; padding: 8px 12px; border-radius: 12px; font-size: 12px; line-height: 1.45; box-shadow: 0 1px 2px rgba(0,0,0,.06); word-break: break-word; }
+  #ubu-chatbot .bubble.bot { background: #fff; color: #1f2937; border-top-left-radius: 4px; }
+  #ubu-chatbot .bubble.welcome { background: #fff; color: #1f2937; border-top-left-radius: 4px; max-width: 82%; }
+  #ubu-chatbot .bubble.user { color: #fff; }
+  #ubu-chatbot .bubble a { color: #0066cc; text-decoration: underline; font-weight: 600; }
+  #ubu-chatbot .loading-dots { display: inline-flex; align-items: center; gap: 4px; }
+  #ubu-chatbot .loading-dots span { width: 6px; height: 6px; border-radius: 999px; background: #9ca3af; animation: ubu-dot-bounce 1.2s infinite; }
+  #ubu-chatbot .loading-dots span:nth-child(2) { animation-delay: .1s; }
+  #ubu-chatbot .loading-dots span:nth-child(3) { animation-delay: .2s; }
+  #ubu-chatbot .input { border-top: 1px solid #f3f4f6; padding: 8px; display: flex; gap: 8px; background: #fff; }
+  #ubu-chatbot .input input { flex: 1; min-width: 0; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 8px; font-size: 12px; outline: none; }
+  #ubu-chatbot .input input:focus { border-color: #6366f1; }
+  #ubu-chatbot .input input:disabled { background: #f3f4f6; color: #9ca3af; cursor: not-allowed; }
+  #ubu-chatbot .input button { border: 0; width: 32px; height: 32px; border-radius: 999px; color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease; flex: 0 0 auto; }
+  #ubu-chatbot .input button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,.14); }
   #ubu-chatbot .input button:disabled { background: #d1d5db !important; cursor: not-allowed; box-shadow: none; transform: none; }
   #ubu-chatbot .input button svg { width: 16px; height: 16px; }
-  #ubu-chatbot .launcher-wrap { position: fixed; right: 24px; bottom: 16px; display: flex; align-items: center; justify-content: center; z-index: 3; }
-  #ubu-chatbot .mascot-btn { border: 0; background: transparent; cursor: pointer; padding: 0; animation: ubu-bounce 2s infinite; }
-  #ubu-chatbot .mascot-btn:hover { animation-play-state: paused; transform: scale(1.04); }
-  #ubu-chatbot .mascot-img { width: 90px; height: 90px; object-fit: contain; filter: drop-shadow(0 12px 20px rgba(0,0,0,.16)); }
-  @keyframes ubu-bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
-  }
+  #ubu-chatbot .launcher-wrap { position: fixed; right: 16px; bottom: 16px; z-index: 2147483000; }
+  #ubu-chatbot .mascot-btn { border: 0; background: transparent; cursor: pointer; padding: 0; animation: ubu-bounce 2s infinite; filter: drop-shadow(0 10px 15px rgba(0,0,0,.15)); }
+  #ubu-chatbot .mascot-btn:hover { animation-play-state: paused; transform: scale(1.05); }
+  #ubu-chatbot .mascot-img { width: 56px; height: 56px; object-fit: contain; }
+  @keyframes ubu-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  @keyframes ubu-dot-bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-4px); } }
 </style>
 
 <div id="ubu-chatbot">
-  <div id="ubu-chatbot-launcher" class="launcher-wrap">
-    <button id="ubu-chatbot-fab" class="mascot-btn" aria-label="แสดงหน้าต่างแชท">
+  <div id="ubu-chatbot-launcher" class="launcher-wrap" style="display:none;">
+    <button id="ubu-chatbot-fab" class="mascot-btn" aria-label="เปิดแชทบอท">
       <img id="ubu-chatbot-launcher-img" class="mascot-img" src="${expressionImages.value.welcome}" alt="${config.value.mascotName}" />
     </button>
   </div>
   <div id="ubu-chatbot-panel" class="panel" style="display:flex;">
     <div id="ubu-chatbot-header" class="header">
-      <span>${config.value.botName}</span>
-      <button id="ubu-chatbot-close" style="background:transparent;border:0;color:#fff;font-weight:700;cursor:pointer;">x</button>
+      <div class="header-left">
+        <img id="ubu-chatbot-header-img" class="header-avatar" src="${expressionImages.value.welcome}" alt="mascot" />
+        <div>
+          <div id="ubu-chatbot-header-name" class="header-name">${config.value.botName}</div>
+          <div id="ubu-chatbot-header-expression" class="header-expression">welcome</div>
+        </div>
+      </div>
+      <button id="ubu-chatbot-close" class="header-close" type="button" aria-label="ปิดแชท">x</button>
     </div>
     <div id="ubu-chatbot-body" class="body"></div>
     <form id="ubu-chatbot-form" class="input">
-      <input id="ubu-chatbot-input" placeholder="พิมพ์ข้อความ..." />
+      <input id="ubu-chatbot-input" placeholder="พิมพ์ข้อความ..." autocomplete="off" />
       <button id="ubu-chatbot-send" type="submit" aria-label="ส่งข้อความ">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-        </svg>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
       </button>
     </form>
   </div>
@@ -453,8 +588,10 @@ const installSnippets = computed<Record<"html" | "node" | "php", string>>(() => 
 <script>
 const BOT_CONFIG = {
   webhookUrl: "${config.value.webhookUrl}",
+  botName: "${config.value.botName.replace(/"/g, '\\"')}",
   headerColor: "${config.value.headerColor}",
   welcomeMessage: "${config.value.welcomeMessage.replace(/"/g, '\\"')}",
+  mascotName: "${config.value.mascotName.replace(/"/g, '\\"')}",
   mascotImages: {
     happy: "${expressionImages.value.happy}",
     thinking: "${expressionImages.value.thinking}",
@@ -465,24 +602,64 @@ const BOT_CONFIG = {
 };
 
 const panel = document.getElementById("ubu-chatbot-panel");
-const fab = document.getElementById("ubu-chatbot-fab");
 const launcher = document.getElementById("ubu-chatbot-launcher");
 const launcherImg = document.getElementById("ubu-chatbot-launcher-img");
+const headerImg = document.getElementById("ubu-chatbot-header-img");
+const headerExpression = document.getElementById("ubu-chatbot-header-expression");
 const closeBtn = document.getElementById("ubu-chatbot-close");
 const header = document.getElementById("ubu-chatbot-header");
 const body = document.getElementById("ubu-chatbot-body");
 const form = document.getElementById("ubu-chatbot-form");
 const input = document.getElementById("ubu-chatbot-input");
 const sendBtn = document.getElementById("ubu-chatbot-send");
+let currentExpression = "welcome";
+
 header.style.background = BOT_CONFIG.headerColor;
 sendBtn.style.background = BOT_CONFIG.headerColor;
-launcher.style.display = "none";
-if (!body.dataset.welcomeShown) {
-  addMsg(BOT_CONFIG.welcomeMessage, "bot", "welcome");
-  body.dataset.welcomeShown = "1";
+
+function setExpression(expression) {
+  const allowed = ["happy", "thinking", "searching", "sorry", "welcome"];
+  const exp = allowed.includes(String(expression || "").toLowerCase()) ? String(expression).toLowerCase() : "sorry";
+  currentExpression = exp;
+  const img = BOT_CONFIG.mascotImages[exp] || BOT_CONFIG.mascotImages.welcome;
+  headerImg.src = img;
+  launcherImg.src = img;
+  headerExpression.textContent = exp;
 }
 
-function addMsg(text, who, expression = "welcome") {
+function parseMarkdownLinks(text) {
+  let safeText = String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+  const markdownLinkRegex = /\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g;
+  safeText = safeText.replace(markdownLinkRegex, (_, linkText, url) =>
+    \`<a href="\${url}" target="_blank" rel="noopener noreferrer">\${linkText}</a>\`
+  );
+  safeText = safeText.replace(/(^|[\\s(])((https?:\\/\\/)[^\\s<]+)/g, (_, prefix, url) =>
+    \`\${prefix}<a href="\${url}" target="_blank" rel="noopener noreferrer">\${url}</a>\`
+  );
+  return safeText;
+}
+
+function renderWelcome() {
+  const row = document.createElement("div");
+  row.className = "welcome-row";
+  const avatar = document.createElement("img");
+  avatar.className = "msg-avatar";
+  avatar.src = BOT_CONFIG.mascotImages.welcome;
+  avatar.alt = "welcome";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble welcome";
+  bubble.innerHTML = parseMarkdownLinks(BOT_CONFIG.welcomeMessage);
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  body.appendChild(row);
+}
+
+function addMsg(text, who, expression) {
   const row = document.createElement("div");
   row.className = "msg-row " + who;
   if (who === "bot") {
@@ -493,9 +670,13 @@ function addMsg(text, who, expression = "welcome") {
     row.appendChild(avatar);
   }
   const bubble = document.createElement("div");
-  bubble.className = "msg " + who;
-  if (who === "user") bubble.style.background = BOT_CONFIG.headerColor;
-  bubble.textContent = text;
+  bubble.className = "bubble " + who;
+  if (who === "user") {
+    bubble.style.background = BOT_CONFIG.headerColor;
+    bubble.textContent = text;
+  } else {
+    bubble.innerHTML = parseMarkdownLinks(text);
+  }
   row.appendChild(bubble);
   body.appendChild(row);
   body.scrollTop = body.scrollHeight;
@@ -512,39 +693,80 @@ function setLoading(isLoading) {
     avatar.src = BOT_CONFIG.mascotImages.thinking || BOT_CONFIG.mascotImages.welcome;
     avatar.alt = "bot-loading";
     const bubble = document.createElement("div");
-    bubble.className = "msg bot";
-    bubble.textContent = "กำลังพิมพ์...";
+    bubble.className = "bubble bot";
+    bubble.innerHTML = '<span class="loading-dots"><span></span><span></span><span></span></span><span style="margin-left:6px;color:#6b7280;font-size:11px;">กำลังพิมพ์...</span>';
     window.__ubuLoading.appendChild(avatar);
     window.__ubuLoading.appendChild(bubble);
     body.appendChild(window.__ubuLoading);
     body.scrollTop = body.scrollHeight;
+    setExpression("thinking");
   } else if (window.__ubuLoading) {
     window.__ubuLoading.remove();
     window.__ubuLoading = null;
   }
 }
 
+function extractAnswer(data) {
+  const stripCodeFence = (text) => {
+    const trimmed = String(text || "").trim();
+    const match = trimmed.match(/^\\\`\\\`\\\`(?:json)?\\s*([\\s\\S]*?)\\s*\\\`\\\`\\\`$/i);
+    return match ? match[1].trim() : trimmed;
+  };
+  const parseMaybeJsonString = (value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = stripCodeFence(value);
+    if (!trimmed) return value;
+    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      try { return JSON.parse(trimmed); } catch { return value; }
+    }
+    return value;
+  };
+  const level1 = parseMaybeJsonString(data);
+  const outputParsed = parseMaybeJsonString(level1?.output);
+  const candidate = typeof outputParsed === "object" && outputParsed !== null ? outputParsed : level1;
+  let answerCandidate = candidate?.answer ?? candidate?.message ?? candidate?.text ?? candidate?.response ?? (typeof candidate?.output === "string" ? candidate.output : "") ?? "";
+  if (typeof answerCandidate === "string") {
+    const cleaned = stripCodeFence(answerCandidate);
+    const parsedNested = parseMaybeJsonString(cleaned);
+    if (typeof parsedNested === "object" && parsedNested !== null) {
+      answerCandidate = parsedNested.answer ?? parsedNested.message ?? parsedNested.text ?? cleaned;
+    } else {
+      answerCandidate = cleaned;
+    }
+  }
+  return {
+    mascot: String(candidate?.mascot || level1?.mascot || BOT_CONFIG.mascotName || "Ubie"),
+    expression: String(candidate?.expression || level1?.expression || "sorry"),
+    answer: String(answerCandidate || "ไม่มีคำตอบจาก webhook"),
+    source: String(candidate?.source || level1?.source || BOT_CONFIG.webhookUrl)
+  };
+}
+
 async function askBot(message) {
   const res = await fetch(BOT_CONFIG.webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chatInput: message, message, mascot: "${config.value.mascotName}" })
+    body: JSON.stringify({ chatInput: message, message, mascot: BOT_CONFIG.mascotName, mode: "build" })
   });
+  if (!res.ok) throw new Error(String(res.status));
   const data = await res.json();
-  return {
-    answer: data.answer || data.message || "ไม่พบคำตอบ",
-    expression: data.expression || "sorry"
-  };
+  return extractAnswer(data);
 }
 
-fab.onclick = () => {
+document.getElementById("ubu-chatbot-fab").onclick = () => {
   panel.style.display = "flex";
   launcher.style.display = "none";
 };
 closeBtn.onclick = () => {
   panel.style.display = "none";
-  launcher.style.display = "flex";
+  launcher.style.display = "block";
 };
+
+if (!body.dataset.welcomeShown) {
+  renderWelcome();
+  setExpression("welcome");
+  body.dataset.welcomeShown = "1";
+}
 
 form.onsubmit = async (e) => {
   e.preventDefault();
@@ -556,12 +778,12 @@ form.onsubmit = async (e) => {
   try {
     const bot = await askBot(message);
     setLoading(false);
+    setExpression(bot.expression);
     addMsg(bot.answer, "bot", bot.expression);
-    const nextImg = BOT_CONFIG.mascotImages[bot.expression] || BOT_CONFIG.mascotImages.welcome;
-    if (nextImg) launcherImg.src = nextImg;
   } catch (err) {
     setLoading(false);
-    addMsg("เชื่อมต่อไม่สำเร็จ", "bot", "sorry");
+    setExpression("sorry");
+    addMsg("เชื่อมต่อ webhook ไม่สำเร็จ กรุณาตรวจสอบ URL หรือ CORS", "bot", "sorry");
   }
 };
 <\/script>`,
@@ -646,6 +868,21 @@ const currentMascotImage = computed(() => {
   return expressionImages.value[lastExpression.value] || expressionImages.value.happy
 })
 
+function parseMarkdownLinks(text: string): string {
+  let safeText = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
+
+  const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g
+
+  return safeText.replace(markdownLinkRegex, (_match, linkText: string, url: string) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #0066cc; text-decoration: underline; font-weight: bold;">${linkText}</a>`
+  })
+}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -669,6 +906,10 @@ async function onExpressionUpload(key: ExpressionKey, event: Event) {
 }
 
 function downloadMascotPack() {
+  if (!hasCodeAccess.value) {
+    openRequestPanel()
+    return
+  }
   const mascotFiles = [
     "BuaBan.svg",
     "happy.svg",
@@ -687,6 +928,65 @@ function downloadMascotPack() {
     link.remove()
   }
   statusText.value = "เริ่มดาวน์โหลดชุดมาสคอตแล้ว"
+}
+
+function openRequestPanel() {
+  showRequestForm.value = codeAccessStatus.value === "none" || codeAccessStatus.value === "rejected"
+  requestPanelRef.value?.scrollIntoView({ behavior: "smooth", block: "center" })
+}
+
+async function fetchCodeAccess() {
+  codeAccessStatus.value = "loading"
+  try {
+    const data = await $fetch(buildApiPath("chatbot/code-access"), { credentials: "include" }) as {
+      access?: boolean
+      status?: CodeAccessStatus
+      request?: CodeRequest
+    }
+    latestCodeRequest.value = data.request || null
+    if (data.access) {
+      codeAccessStatus.value = "approved"
+      return
+    }
+    codeAccessStatus.value = data.status || "none"
+  } catch (error: any) {
+    const statusCode = error?.status || error?.statusCode
+    if (statusCode === 401) {
+      codeAccessStatus.value = "unauthenticated"
+    } else {
+      codeAccessStatus.value = "none"
+    }
+  }
+}
+
+async function submitCodeRequest() {
+  requestError.value = ""
+  submittingRequest.value = true
+  try {
+    await $fetch(buildApiPath("chatbot/code-request"), {
+      method: "POST",
+      credentials: "include",
+      body: {
+        projectName: requestForm.value.projectName,
+        websiteUrl: requestForm.value.websiteUrl,
+        purpose: requestForm.value.purpose,
+        usageType: requestForm.value.usageType
+      }
+    })
+    showRequestForm.value = false
+    codeAccessStatus.value = "pending"
+    statusText.value = "ส่งคำขอรับโค้ดแล้ว รอผู้ดูแลอนุมัติ"
+    copyToast.value = { show: true, message: "ส่งคำขอเรียบร้อย" }
+    if (copyToastTimer) clearTimeout(copyToastTimer)
+    copyToastTimer = setTimeout(() => {
+      copyToast.value = { show: false, message: "" }
+    }, 1800)
+    await fetchCodeAccess()
+  } catch (error: any) {
+    requestError.value = error?.data?.message || error?.data?.error || "ส่งคำขอไม่สำเร็จ กรุณาลองใหม่"
+  } finally {
+    submittingRequest.value = false
+  }
 }
 
 function openMascotPosterModal() {
@@ -847,6 +1147,10 @@ function focusBlock(el: HTMLElement | null) {
   el.scrollIntoView({ behavior: "smooth", block: "center" })
 }
 function goToGuideStep(step: "webhook" | "profile" | "color" | "expression" | "preview" | "flow" | "install") {
+  if ((step === "flow" || step === "install") && !hasCodeAccess.value) {
+    openRequestPanel()
+    return
+  }
   activeGuideStep.value = step
   if (step === "webhook") {
     webhookInputRef.value?.scrollIntoView({ behavior: "smooth", block: "center" })
@@ -877,13 +1181,15 @@ function downloadFlowExample() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = "osd-flow-full.json"
+  a.download = "chatbot-demo-flow.json"
   a.click()
   URL.revokeObjectURL(url)
   copyToast.value = { show: true, message: "ดาวน์โหลดไฟล์ flow แล้ว" }
 }
 
 onMounted(async () => {
+  await fetchCodeAccess()
+  window.addEventListener("user-login-success", fetchCodeAccess)
   try {
     const response = await fetch(flowFilePath)
     if (!response.ok) throw new Error("flow-load-failed")
@@ -891,6 +1197,10 @@ onMounted(async () => {
   } catch {
     n8nFlowExample.value = "{\n  \"error\": \"โหลดไฟล์ flow ไม่สำเร็จ\"\n}"
   }
+})
+
+onUnmounted(() => {
+  window.removeEventListener("user-login-success", fetchCodeAccess)
 })
 </script>
 

@@ -101,8 +101,26 @@
       </div>
 
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 md:p-6">
+        <div class="mb-6 flex flex-wrap gap-2">
+          <button
+            class="rounded-lg px-4 py-2 text-sm font-semibold"
+            :class="activeTab === 'api-key' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'"
+            @click="activeTab = 'api-key'"
+          >
+            คำขอ API Key
+          </button>
+          <button
+            class="rounded-lg px-4 py-2 text-sm font-semibold"
+            :class="activeTab === 'chatbot-code' ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'"
+            @click="activeTab = 'chatbot-code'"
+          >
+            คำขอโค้ด Chatbot
+            <span v-if="pendingChatbotCount > 0" class="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-xs">{{ pendingChatbotCount }}</span>
+          </button>
+        </div>
+
         <!-- Filters -->
-        <div class="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div v-if="activeTab === 'api-key'" class="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ค้นหาชื่อ/อีเมล/บัญชี</label>
             <input v-model="searchQuery" type="text" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white" placeholder="พิมพ์คำค้น..." />
@@ -120,7 +138,7 @@
           <p class="text-gray-500 dark:text-gray-400">กำลังโหลดข้อมูล...</p>
         </div>
 
-        <div v-else>
+        <div v-else-if="activeTab === 'api-key'">
           <div v-if="filteredRequests.length === 0" class="text-center py-12 text-gray-500 dark:text-gray-400">
             ไม่มีคำขอรออนุมัติ
           </div>
@@ -163,6 +181,47 @@
             </div>
           </div>
         </div>
+
+        <div v-else>
+          <div v-if="filteredChatbotRequests.length === 0" class="text-center py-12 text-gray-500 dark:text-gray-400">
+            ไม่มีคำขอโค้ด Chatbot รออนุมัติ
+          </div>
+          <div v-else class="space-y-4">
+            <div v-for="req in filteredChatbotRequests" :key="`chatbot-${req.id}`" class="border border-amber-200 dark:border-amber-900/40 rounded-lg p-4 md:p-5 bg-amber-50/60 dark:bg-amber-900/10">
+              <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-base md:text-lg font-semibold text-gray-900 dark:text-white mb-1 break-words">{{ req.project_name }}</h3>
+                  <div class="text-sm text-gray-700 dark:text-gray-300 grid grid-cols-1 md:grid-cols-2 gap-x-4 md:gap-x-8 gap-y-1">
+                    <p><span class="font-medium">ผู้ขอ:</span> {{ req.user_fullname || '-' }}</p>
+                    <p><span class="font-medium">บัญชี:</span> {{ req.ubuaccount || '-' }}</p>
+                    <p><span class="font-medium">อีเมล:</span> <span class="break-all">{{ req.email || '-' }}</span></p>
+                    <p class="md:col-span-2"><span class="font-medium">เว็บไซต์:</span> {{ req.website_url || '-' }}</p>
+                    <p class="md:col-span-2"><span class="font-medium">หน่วยงาน:</span> {{ req.department_name || req.faculty || 'ไม่ระบุ' }}</p>
+                    <p><span class="font-medium">ประเภท:</span> {{ req.usage_type || '-' }}</p>
+                    <p class="md:col-span-2"><span class="font-medium">วัตถุประสงค์:</span> {{ req.purpose || '-' }}</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 md:col-span-2">ส่งเมื่อ: {{ formatDate(req.created_at) }}</p>
+                  </div>
+                </div>
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-shrink-0 lg:ml-4">
+                  <button
+                    :disabled="processingChatbotId===req.id"
+                    @click="rejectChatbot(req)"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full text-white shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed bg-gradient-to-tr from-red-600 to-rose-600 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm whitespace-nowrap"
+                  >
+                    ปฏิเสธ
+                  </button>
+                  <button
+                    :disabled="processingChatbotId===req.id"
+                    @click="approveChatbot(req)"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full text-white shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed bg-gradient-to-tr from-amber-600 to-orange-600 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm whitespace-nowrap"
+                  >
+                    อนุมัติ
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -179,10 +238,13 @@ declare const navigateTo: any
 definePageMeta({ middleware: 'admin-only' })
 
 const loading = ref(true)
+const activeTab = ref<'api-key' | 'chatbot-code'>('api-key')
 const requests = ref<any[]>([])
+const chatbotRequests = ref<any[]>([])
 const searchQuery = ref('')
 const deptFilter = ref('')
 const processingId = ref<number | null>(null)
+const processingChatbotId = ref<number | null>(null)
 const queueLoading = ref(false)
 const queueActionLoading = ref(false)
 const requeueJobId = ref<number | null>(null)
@@ -195,6 +257,30 @@ let queueAutoRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 const apiBase = useRuntimeConfig().public.apiBase as string
 const buildApiPath = (endpoint: string) => apiBase.endsWith('/api') || apiBase === '/api' ? `${apiBase}/${endpoint}` : `${apiBase}/api/${endpoint}`
+
+const fetchChatbotRequests = async (silent = false) => {
+  if (!silent) loading.value = true
+  try {
+    const res = await $fetch(buildApiPath('admin/chatbot-code-requests'), { credentials: 'include' }) as { requests: any[] }
+    chatbotRequests.value = (res.requests || []).filter(r => r.status === 'pending')
+
+    const route = useRoute()
+    const approveId = route.query.approveChatbot
+    if (approveId) {
+      activeTab.value = 'chatbot-code'
+      const requestId = Number(approveId)
+      const reqToApprove = chatbotRequests.value.find(r => r.id === requestId)
+      if (reqToApprove) {
+        await approveChatbot(reqToApprove)
+        await navigateTo({ query: {} })
+      }
+    }
+  } catch (e) {
+    console.error('Error loading chatbot code requests:', e)
+  } finally {
+    if (!silent) loading.value = false
+  }
+}
 
 const fetchRequests = async (silent = false) => {
   if (!silent) loading.value = true
@@ -242,6 +328,22 @@ const filteredRequests = computed(() => {
   }
   if (deptFilter.value) {
     list = list.filter(r => r.department === deptFilter.value)
+  }
+  return list
+})
+
+const pendingChatbotCount = computed(() => chatbotRequests.value.length)
+
+const filteredChatbotRequests = computed(() => {
+  let list = chatbotRequests.value
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    list = list.filter(r =>
+      String(r.project_name || '').toLowerCase().includes(q) ||
+      String(r.user_fullname || '').toLowerCase().includes(q) ||
+      String(r.email || '').toLowerCase().includes(q) ||
+      String(r.ubuaccount || '').toLowerCase().includes(q)
+    )
   }
   return list
 })
@@ -365,6 +467,34 @@ const reject = async (reqItem: any) => {
   }
 }
 
+const approveChatbot = async (reqItem: any) => {
+  try {
+    processingChatbotId.value = reqItem.id
+    await $fetch(buildApiPath(`admin/chatbot-code-requests/${reqItem.id}/approve`), { method: 'POST', credentials: 'include' })
+    chatbotRequests.value = chatbotRequests.value.filter(r => r.id !== reqItem.id)
+    try { const Swal = (await import('sweetalert2')).default; await Swal.fire({ icon: 'success', title: 'อนุมัติโค้ด Chatbot แล้ว' }) } catch {}
+  } catch (e) {
+    console.error('Approve chatbot request failed:', e)
+    try { const Swal = (await import('sweetalert2')).default; await Swal.fire({ icon: 'error', title: 'อนุมัติไม่สำเร็จ' }) } catch {}
+  } finally {
+    processingChatbotId.value = null
+  }
+}
+
+const rejectChatbot = async (reqItem: any) => {
+  try {
+    processingChatbotId.value = reqItem.id
+    await $fetch(buildApiPath(`admin/chatbot-code-requests/${reqItem.id}/reject`), { method: 'POST', credentials: 'include' })
+    chatbotRequests.value = chatbotRequests.value.filter(r => r.id !== reqItem.id)
+    try { const Swal = (await import('sweetalert2')).default; await Swal.fire({ icon: 'success', title: 'ปฏิเสธแล้ว' }) } catch {}
+  } catch (e) {
+    console.error('Reject chatbot request failed:', e)
+    try { const Swal = (await import('sweetalert2')).default; await Swal.fire({ icon: 'error', title: 'ปฏิเสธไม่สำเร็จ' }) } catch {}
+  } finally {
+    processingChatbotId.value = null
+  }
+}
+
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('th-TH', {
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -372,11 +502,19 @@ const formatDate = (dateString: string) => {
   })
 }
 
-onMounted(fetchRequests)
+onMounted(async () => {
+  loading.value = true
+  try {
+    await Promise.all([fetchRequests(true), fetchChatbotRequests(true)])
+  } finally {
+    loading.value = false
+  }
+})
 onMounted(fetchQueueStatus)
 onMounted(() => {
   requestsAutoRefreshTimer = setInterval(() => {
     fetchRequests(true).catch(() => {})
+    fetchChatbotRequests(true).catch(() => {})
   }, AUTO_REFRESH_MS)
   queueAutoRefreshTimer = setInterval(() => {
     fetchQueueStatus().catch(() => {})

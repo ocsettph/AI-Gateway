@@ -4,6 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs/promises';
 import fssync from 'node:fs';
 import path from 'node:path';
@@ -16,6 +17,39 @@ dotenv.config();
 
 // Ensure Node process uses Bangkok time by default
 process.env.TZ = 'Asia/Bangkok';
+
+// --- Structured logging: timestamp + user on every line ---
+const requestLogContext = new AsyncLocalStorage();
+
+function formatLogTimestamp() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+function getLogUser() {
+  return requestLogContext.getStore()?.username || '-';
+}
+
+function formatLogPrefix() {
+  return `[${formatLogTimestamp()}] [user: ${getLogUser()}]`;
+}
+
+function setLogUser(username) {
+  const store = requestLogContext.getStore();
+  if (store && username) store.username = username;
+}
+
+function patchConsoleWithContext() {
+  for (const level of ['log', 'info', 'warn', 'error']) {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+      original(formatLogPrefix(), ...args);
+    };
+  }
+}
+
+patchConsoleWithContext();
 
 const app = express();
 
@@ -40,7 +74,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // IP Whitelist middleware for API security
 // Allow IPs from environment variable or use defaults
-const allowedIPsEnv = process.env.ALLOWED_IPS || '192.168.176.1,202.28.49.204,192.168.10.24,35.193.131.93';
+const allowedIPsEnv = process.env.ALLOWED_IPS || '192.168.176.1,202.28.49.204,192.168.10.24,35.193.131.93,192.168.15.187';
 const allowedIPs = allowedIPsEnv.split(',').map(ip => ip.trim()).filter(Boolean);
 const IP_WHITELIST_ENABLED = process.env.IP_WHITELIST_ENABLED === 'true'; // Default to disabled (set IP_WHITELIST_ENABLED=true to enable)
 
@@ -729,7 +763,7 @@ import { Pool } from 'pg';
 
 const pool = new Pool({
   user: process.env.PGUSER || 'ai',
-  host: process.env.PGHOST || '202.28.49.204',
+  host: process.env.PGHOST || '192.168.15.187',
   database: process.env.PGDATABASE || 'ai-gateway',
   password: process.env.PGPASSWORD || 'ubu-ai',
   port: process.env.PGPORT || 5433,
@@ -742,6 +776,57 @@ pool.on('connect', async (client) => {
   } catch (e) {
     console.warn('Failed to set DB time zone:', e?.message || e);
   }
+});
+
+async function resolveLogUser(req) {
+  try {
+    const cookies = parseCookies(req);
+    const session = verify(cookies.session);
+    if (session?.user?.username) return session.user.username;
+
+    const auth = req.headers.authorization || '';
+    if (!auth.startsWith('Bearer ')) return '-';
+
+    const token = auth.slice('Bearer '.length).trim();
+    if (token.startsWith('ubu_')) {
+      const keyHash = crypto.createHash('sha256').update(token).digest('hex');
+      const client = await pool.connect();
+      try {
+        const result = await client.query(
+          `SELECT u.ubuaccount AS username
+           FROM api_keys ak JOIN users u ON ak.user_id = u.id
+           WHERE ak.key_hash = $1`,
+          [keyHash]
+        );
+        if (result.rows[0]?.username) return result.rows[0].username;
+      } finally {
+        client.release();
+      }
+      return 'api-key';
+    }
+
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `SELECT u.ubuaccount AS username
+         FROM api_user_tokens ut JOIN users u ON ut.user_id = u.id
+         WHERE ut.token_hash = $1 AND ut.is_active = true AND (ut.expires_at IS NULL OR ut.expires_at > NOW())`,
+        [hash]
+      );
+      if (result.rows[0]?.username) return result.rows[0].username;
+    } finally {
+      client.release();
+    }
+    return 'bearer';
+  } catch {
+    return '-';
+  }
+}
+
+app.use(async (req, res, next) => {
+  const username = await resolveLogUser(req);
+  requestLogContext.run({ username }, () => next());
 });
 
 // Admin: list all API keys with user info + filters
@@ -912,6 +997,21 @@ async function ensureSchema() {
     `);
     await client.query(`ALTER TABLE api_key_requests ADD COLUMN IF NOT EXISTS course_name VARCHAR(255);`);
     await client.query(`ALTER TABLE api_key_requests ADD COLUMN IF NOT EXISTS other_details TEXT;`);
+
+    // Chatbot embed code access requests
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chatbot_code_requests (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        project_name VARCHAR(255) NOT NULL,
+        website_url VARCHAR(500),
+        purpose TEXT NOT NULL,
+        usage_type VARCHAR(100),
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT timezone('Asia/Bangkok', now()),
+        updated_at TIMESTAMP DEFAULT timezone('Asia/Bangkok', now())
+      );
+    `);
     
     // API Keys table (for approved keys)
     await client.query(`
@@ -5102,6 +5202,208 @@ app.get('/api/admin/requests', async (req, res) => {
   }
 });
 
+// Admin: Get chatbot code access requests
+app.get('/api/admin/chatbot-code-requests', async (req, res) => {
+  try {
+    const session = verify(parseCookies(req).session);
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const result = await client.query(`
+        SELECT
+          ccr.id, ccr.user_id, ccr.project_name, ccr.website_url, ccr.purpose, ccr.usage_type, ccr.status,
+          ccr.created_at, ccr.updated_at,
+          u.fullname AS user_fullname, u.email, u.ubuaccount, u.department_name, u.faculty
+        FROM chatbot_code_requests ccr
+        LEFT JOIN users u ON ccr.user_id = u.id
+        ORDER BY ccr.created_at DESC
+      `);
+      res.json({ requests: result.rows });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error fetching chatbot code requests:', error);
+    res.status(500).json({ error: 'Failed to fetch chatbot code requests' });
+  }
+});
+
+// Admin: Approve chatbot code access request
+app.post('/api/admin/chatbot-code-requests/:id/approve', async (req, res) => {
+  try {
+    const isDirectCall = !req.headers.cookie || !parseCookies(req).session;
+    const session = isDirectCall ? null : verify(parseCookies(req).session);
+    if (!isDirectCall && (!session?.user || session.user.role !== 'ADMIN')) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const requestId = req.params.id;
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `UPDATE chatbot_code_requests
+         SET status = 'approved', updated_at = NOW()
+         WHERE id = $1 AND status = 'pending'
+         RETURNING *`,
+        [requestId]
+      );
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'Request not found or already processed' });
+      }
+      res.json({ success: true, request: result.rows[0] });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error approving chatbot code request:', error);
+    res.status(500).json({ error: 'Failed to approve chatbot code request' });
+  }
+});
+
+// Admin: Reject chatbot code access request
+app.post('/api/admin/chatbot-code-requests/:id/reject', async (req, res) => {
+  try {
+    const session = verify(parseCookies(req).session);
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const requestId = req.params.id;
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `UPDATE chatbot_code_requests
+         SET status = 'rejected', updated_at = NOW()
+         WHERE id = $1 AND status = 'pending'
+         RETURNING *`,
+        [requestId]
+      );
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'Request not found or already processed' });
+      }
+      res.json({ success: true, request: result.rows[0] });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error rejecting chatbot code request:', error);
+    res.status(500).json({ error: 'Failed to reject chatbot code request' });
+  }
+});
+
+// GET /api/chatbot/code-access - check if user can view embed code & downloads
+app.get('/api/chatbot/code-access', async (req, res) => {
+  try {
+    const user = await getAuthUser(req);
+    if (!user) {
+      return res.json({ access: false, status: 'unauthenticated' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `SELECT id, project_name, website_url, purpose, usage_type, status, created_at, updated_at
+         FROM chatbot_code_requests
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [user.id]
+      );
+      const latest = result.rows[0];
+      if (!latest) {
+        return res.json({ access: false, status: 'none' });
+      }
+      if (latest.status === 'approved') {
+        return res.json({ access: true, status: 'approved', request: latest });
+      }
+      return res.json({ access: false, status: latest.status, request: latest });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('GET /api/chatbot/code-access error:', error?.message || error);
+    res.status(500).json({ error: 'failed_to_check_access' });
+  }
+});
+
+// POST /api/chatbot/code-request - request access to embed code
+app.post('/api/chatbot/code-request', async (req, res) => {
+  try {
+    const user = await getAuthUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'กรุณาเข้าสู่ระบบก่อนส่งคำขอ' });
+    }
+
+    const { projectName, websiteUrl, purpose, usageType } = req.body || {};
+    if (!projectName?.trim() || !purpose?.trim()) {
+      return res.status(400).json({ error: 'projectName and purpose are required' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const existing = await client.query(
+        `SELECT id, status FROM chatbot_code_requests
+         WHERE user_id = $1 AND status IN ('pending', 'approved')
+         ORDER BY created_at DESC LIMIT 1`,
+        [user.id]
+      );
+      if (existing.rows[0]?.status === 'approved') {
+        return res.json({ access: true, status: 'approved', request: existing.rows[0] });
+      }
+      if (existing.rows[0]?.status === 'pending') {
+        return res.status(409).json({
+          error: 'request_pending',
+          message: 'คุณมีคำขอที่รออนุมัติอยู่แล้ว กรุณารอผู้ดูแลระบบตรวจสอบ'
+        });
+      }
+
+      const userRow = await client.query(
+        'SELECT fullname, email, faculty, department_name, ubuaccount FROM users WHERE id = $1',
+        [user.id]
+      );
+      const profile = userRow.rows[0] || {};
+
+      const result = await client.query(
+        `INSERT INTO chatbot_code_requests (user_id, project_name, website_url, purpose, usage_type, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), NOW())
+         RETURNING *`,
+        [user.id, projectName.trim(), websiteUrl?.trim() || null, purpose.trim(), usageType?.trim() || null]
+      );
+      const reqRow = result.rows[0];
+      const frontendBase = (process.env.FRONTEND_BASE_PATH || '').replace(/\/$/, '');
+      const approveUrl = `${BASE_URL}${frontendBase}/admin/requests?approveChatbot=${reqRow.id}`;
+
+      const now = new Date();
+      const thaiDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear() + 543} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+      const lines = [
+        'มีคำขอเข้าถึงโค้ด Chatbot Popup',
+        '',
+        `โปรเจกต์: ${reqRow.project_name}`,
+        `เว็บไซต์: ${reqRow.website_url || '-'}`,
+        `ผู้ขอ: ${profile.fullname || user.username || '-'} (${profile.email || '-'})`,
+        `หน่วยงาน: ${profile.department_name || profile.faculty || '-'}`,
+        `ประเภทการใช้งาน: ${reqRow.usage_type || '-'}`,
+        `วัตถุประสงค์: ${reqRow.purpose}`,
+        `เวลา: ${thaiDate}`,
+        '',
+        `👍 คลิกเพื่ออนุมัติ: ${approveUrl}`
+      ];
+      sendNotifyMessage(lines.join('\n')).catch(() => {});
+
+      res.json({ request: reqRow, status: 'pending' });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('POST /api/chatbot/code-request error:', error?.message || error);
+    res.status(500).json({ error: 'failed_to_create_request' });
+  }
+});
+
 // Admin: Approve API key request
 app.post('/api/admin/requests/:id/approve', async (req, res) => {
   try {
@@ -5846,6 +6148,79 @@ function freshiePublicTempUrl(req, token) {
 
 const FRESHIE_ANIME_RETRY_USER_MESSAGE =
   'ระบบ AI ยังไม่ส่งรูปกลับมา — กรุณากด Generate 3D อีกครั้ง (หรือเปลี่ยนรูปแล้วลองใหม่)';
+const FRESHIE_ANIME_SEND_EMAIL = !['0', 'false', 'no'].includes(
+  String(process.env.FRESHIE_ANIME_SEND_EMAIL || 'true').toLowerCase()
+);
+const FRESHIE_FRAME_PUBLIC_URL =
+  process.env.FRESHIE_FRAME_PUBLIC_URL || 'https://aigateway.ubu.ac.th/freshie-frame';
+
+async function resolveFreshieUserContact(user) {
+  if (!user) return { email: null, fullname: null, username: null };
+  let email = user.email ? String(user.email).trim() : '';
+  let fullname = user.fullname ? String(user.fullname).trim() : '';
+  let username = user.username ? String(user.username).trim() : '';
+
+  if ((!email || !fullname) && user.id != null && user.id !== '') {
+    try {
+      const client = await pool.connect();
+      try {
+        const r = await client.query(
+          'SELECT email, fullname, ubuaccount FROM users WHERE id = $1 LIMIT 1',
+          [user.id]
+        );
+        if (r.rows[0]) {
+          if (!email) email = String(r.rows[0].email || '').trim();
+          if (!fullname) fullname = String(r.rows[0].fullname || '').trim();
+          if (!username && r.rows[0].ubuaccount) {
+            username = String(r.rows[0].ubuaccount);
+          }
+        }
+      } finally {
+        client.release();
+      }
+    } catch (e) {
+      console.warn('freshie user contact lookup:', e?.message || e);
+    }
+  }
+  if (!email && username) {
+    email = username.includes('@') ? username : `${username}@ubu.ac.th`;
+  }
+  return {
+    email: email || null,
+    fullname: fullname || username || null,
+    username: username || null
+  };
+}
+
+async function sendFreshieAnime3dReadyEmail(contact, imageUrl) {
+  if (!contact?.email) return false;
+  const name = contact.fullname || contact.username || 'ผู้ใช้';
+  const subject = 'รูป AI Anime 3D ของคุณพร้อมแล้ว — UBU Freshie Frame';
+  const imgBlock = imageUrl
+    ? `<p style="text-align:center;margin:24px 0;"><img src="${imageUrl}" alt="AI Anime 3D" style="max-width:320px;border-radius:12px;" /></p>
+       <p style="text-align:center;"><a href="${imageUrl}" style="color:#E94E77;font-weight:600;">ดาวน์โหลดรูป AI Anime 3D</a></p>`
+    : '';
+  const html = `<!DOCTYPE html>
+<html lang="th">
+<head><meta charset="utf-8"><title>UBU Freshie Frame</title></head>
+<body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,'Noto Sans Thai',Arial,sans-serif;background:#fff;">
+  <div style="max-width:600px;margin:0 auto;padding:24px;">
+    <p style="font-size:16px;line-height:26px;">เรียนคุณ ${name}</p>
+    <p style="font-size:15px;line-height:26px;">ระบบสร้างรูป <strong>AI Anime 3D</strong> ของคุณเสร็จแล้ว</p>
+    ${imgBlock}
+    <p style="text-align:center;margin:28px 0;">
+      <a href="${FRESHIE_FRAME_PUBLIC_URL}" style="display:inline-block;padding:12px 28px;background:#E94E77;color:#fff;text-decoration:none;border-radius:999px;font-weight:600;">เปิดหน้า Freshie Frame</a>
+    </p>
+    <p style="font-size:13px;color:#667085;">ลิงก์รูปชั่วคราวมีอายุประมาณ 30 นาที — แนะนำดาวน์โหลดหรือใส่เฟรมทันที</p>
+    <p style="font-size:14px;">ขอบคุณครับ<br><strong>UBU AI Team</strong></p>
+  </div>
+</body>
+</html>`;
+  const text = `เรียนคุณ ${name}\nรูป AI Anime 3D ของคุณพร้อมแล้ว\n${
+    imageUrl ? `ดาวน์โหลด: ${imageUrl}\n` : ''
+  }เปิดหน้า Freshie Frame: ${FRESHIE_FRAME_PUBLIC_URL}`;
+  return sendEmail(contact.email, subject, html, text);
+}
 
 let freshieFrameStatsCache = { total: 0, updatedAt: null };
 
@@ -6067,6 +6442,7 @@ app.post('/api/freshie-frame/anime-3d', async (req, res) => {
 
     const { fileName, fileSize, decodedSize } = validated;
     const style = String(req.body?.style || '3d_anime').trim() || '3d_anime';
+    const contact = await resolveFreshieUserContact(user);
 
     let photoBuffer = validated.photoBuffer;
     try {
@@ -6084,7 +6460,9 @@ app.post('/api/freshie-frame/anime-3d', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        role: user.role
+        role: user.role,
+        email: contact.email,
+        fullname: contact.fullname
       },
       style,
       prompt:
@@ -6161,6 +6539,13 @@ app.post('/api/freshie-frame/anime-3d', async (req, res) => {
     }
     const newTotal = await incrementFreshieFrameSuccess('anime_3d');
     out.statsTotal = newTotal;
+
+    if (FRESHIE_ANIME_SEND_EMAIL && contact.email) {
+      void sendFreshieAnime3dReadyEmail(contact, imageUrl || null).catch((e) => {
+        console.warn('freshie anime 3d email:', e?.message || e);
+      });
+    }
+
     return res.json(out);
   } catch (error) {
     console.error('Error freshie-frame anime-3d:', error);
@@ -7656,6 +8041,34 @@ const enableV1 = shouldEnableV1 !== 'false';
 if (enableV1) {
   console.log('✅ Public v1 endpoints enabled (dev2 compatibility)');
 
+  function formatOpenRouterProviderError(rawData) {
+    const err = rawData?.error || rawData;
+    const metadata = err?.metadata;
+    if (!metadata) return null;
+    if (typeof metadata === 'string') return metadata;
+    if (metadata.provider_message) return String(metadata.provider_message);
+    if (metadata.raw) return String(metadata.raw);
+    if (metadata.message) return String(metadata.message);
+    try {
+      return JSON.stringify(metadata);
+    } catch {
+      return String(metadata);
+    }
+  }
+
+  function buildProviderErrorDetails(rawData) {
+    const err = rawData?.error || rawData;
+    const metadata = err?.metadata;
+    const providerMessage = formatOpenRouterProviderError(rawData);
+    return {
+      error: err,
+      message: err?.message || rawData?.message,
+      code: err?.code || rawData?.code,
+      metadata: metadata && typeof metadata === 'object' ? metadata : undefined,
+      provider_message: providerMessage || undefined
+    };
+  }
+
   const forwardToOpenRouter = async (req, res, targetUrl) => {
     // Declare variables outside try block so they're accessible in catch block
     let token = null;
@@ -7676,7 +8089,11 @@ if (enableV1) {
         if (token.startsWith('ubu_')) {
           const keyHash = crypto.createHash('sha256').update(token).digest('hex');
           const result = await client.query(
-            'SELECT id, user_id, provider_key_value, provider, is_active, credit_limit FROM api_keys WHERE key_hash = $1',
+            `SELECT ak.id, ak.user_id, ak.provider_key_value, ak.provider, ak.is_active, ak.credit_limit,
+                    u.ubuaccount AS username
+             FROM api_keys ak
+             LEFT JOIN users u ON ak.user_id = u.id
+             WHERE ak.key_hash = $1`,
             [keyHash]
           );
           
@@ -7687,6 +8104,7 @@ if (enableV1) {
           const key = result.rows[0];
           keyId = key.id;
           userId = key.user_id;
+          if (key.username) setLogUser(key.username);
           
           if (!key.is_active) {
             return res.status(403).json({ error: 'key_disabled', message: 'This API key has been disabled' });
@@ -7779,8 +8197,32 @@ if (enableV1) {
         console.log(`   🔄 Normalized model field: ${requestBody.model}`);
       }
 
-      // Responses API with stream: true — forward SSE stream and parse usage from response.done
-      if (targetUrl.includes('/responses') && requestBody.stream === true) {
+      // Chat Completions / Messages / Responses API with stream: true — forward SSE
+      const isChatCompletionsStream =
+        targetUrl.includes('/chat/completions') && requestBody.stream === true;
+      const isMessagesStream =
+        targetUrl.includes('/messages') && requestBody.stream === true;
+      const isResponsesStream =
+        targetUrl.includes('/responses') && requestBody.stream === true;
+      if (isChatCompletionsStream || isMessagesStream || isResponsesStream) {
+        if (isChatCompletionsStream) {
+          requestBody.stream_options = {
+            ...(requestBody.stream_options && typeof requestBody.stream_options === 'object'
+              ? requestBody.stream_options
+              : {}),
+            include_usage: requestBody.stream_options?.include_usage !== false
+          };
+          console.log('   📡 Streaming chat/completions (forwarding SSE)');
+        } else if (isMessagesStream) {
+          console.log('   📡 Streaming messages (forwarding SSE)');
+        } else {
+          console.log('   📡 Streaming responses (forwarding SSE)');
+        }
+        const streamAction = isResponsesStream
+          ? 'responses'
+          : isMessagesStream
+            ? 'messages'
+            : 'chat.completions';
         let streamResponse;
         try {
           streamResponse = await axios({
@@ -7817,9 +8259,21 @@ if (enableV1) {
           const body = Buffer.concat(chunks).toString('utf8');
           let errBody = {};
           try { errBody = JSON.parse(body); } catch (_) { errBody = { message: body || streamResponse.statusText }; }
-          const safeDetails = errBody?.error ? { error: errBody.error } : { message: errBody?.message || streamResponse.statusText };
+          const errorDetails = buildProviderErrorDetails(errBody);
+          const providerMessage = errorDetails.provider_message;
+          console.error(`   ❌ OpenRouter stream error (${streamResponse.status}):`, {
+            message: errorDetails.message || streamResponse.statusText,
+            model: requestBody.model,
+            targetUrl,
+            provider_message: providerMessage,
+            metadata: errorDetails.metadata
+          });
           if (!res.headersSent) {
-            return res.status(streamResponse.status).json({ error: 'provider_error', message: errBody?.error?.message || errBody?.message || streamResponse.statusText, details: safeDetails });
+            return res.status(streamResponse.status).json({
+              error: 'provider_error',
+              message: providerMessage || errorDetails.message || streamResponse.statusText,
+              details: errorDetails
+            });
           }
           return;
         }
@@ -7832,12 +8286,27 @@ if (enableV1) {
         let lineBuffer = '';
         const stream = streamResponse.data;
 
+        function mergeStreamUsage(existing, incoming) {
+          if (!incoming) return existing;
+          const merged = existing ? { ...existing } : {};
+          for (const key of ['prompt_tokens', 'completion_tokens', 'input_tokens', 'output_tokens', 'total_tokens', 'total_cost', 'cost']) {
+            if (incoming[key] != null) merged[key] = incoming[key];
+          }
+          return merged;
+        }
+
         function tryParseUsageFromPayload(payload) {
           if (!payload || payload === '[DONE]') return;
           try {
             const obj = JSON.parse(payload);
             if (obj.type === 'response.done' && obj.response && obj.response.usage) {
               return obj.response.usage;
+            }
+            if (obj.type === 'message_start' && obj.message?.usage) {
+              return obj.message.usage;
+            }
+            if (obj.type === 'message_delta' && obj.usage) {
+              return obj.usage;
             }
             if (obj.usage && (obj.usage.input_tokens != null || obj.usage.output_tokens != null || obj.usage.prompt_tokens != null)) {
               return obj.usage;
@@ -7855,7 +8324,7 @@ if (enableV1) {
             if (line.startsWith('data: ')) {
               const payload = line.slice(6).trim();
               const u = tryParseUsageFromPayload(payload);
-              if (u) usageFromStream = u;
+              if (u) usageFromStream = mergeStreamUsage(usageFromStream, u);
             }
           }
           res.write(chunk);
@@ -7869,13 +8338,13 @@ if (enableV1) {
               if (line.startsWith('data: ')) {
                 const payload = line.slice(6).trim();
                 const u = tryParseUsageFromPayload(payload);
-                if (u) usageFromStream = u;
+                if (u) usageFromStream = mergeStreamUsage(usageFromStream, u);
               }
             }
             // Single line without newline (last event only)
             if (remaining.startsWith('data: ') && !remaining.includes('\n')) {
               const u = tryParseUsageFromPayload(remaining.slice(6).trim());
-              if (u) usageFromStream = u;
+              if (u) usageFromStream = mergeStreamUsage(usageFromStream, u);
             }
           }
           if (token.startsWith('ubu_') && keyId && userId && usageFromStream) {
@@ -7914,10 +8383,10 @@ if (enableV1) {
               try {
                 await client2.query(`
                   INSERT INTO api_usage_logs (api_key_id, user_id, provider, action, model, tokens_input, tokens_output, cost_usd, status_code, response_time_ms)
-                  VALUES ($1, $2, 'openrouter', 'responses', $3, $4, $5, $6, 200, 0)
-                `, [keyId, userId, modelId, tokensIn, tokensOut, cost]);
+                  VALUES ($1, $2, 'openrouter', $3, $4, $5, $6, $7, 200, 0)
+                `, [keyId, userId, streamAction, modelId, tokensIn, tokensOut, cost]);
                 await client2.query('UPDATE api_keys SET last_used_at = timezone(\'Asia/Bangkok\', now()), current_spend = COALESCE(current_spend, 0) + $2 WHERE id = $1', [keyId, cost]);
-                console.log(`   📊 Logged usage (responses stream): ${tokensIn + tokensOut} tokens, $${cost.toFixed(6)}`);
+                console.log(`   📊 Logged usage (${streamAction} stream): ${tokensIn + tokensOut} tokens, $${cost.toFixed(6)}`);
               } finally {
                 client2.release();
               }
@@ -7925,7 +8394,7 @@ if (enableV1) {
               console.warn('   ⚠️ Usage logging failed (stream):', e?.message || e);
             }
           } else if (token.startsWith('ubu_') && keyId && !usageFromStream) {
-            console.warn('   ⚠️ No usage in stream (response.done not seen or empty) — not logging');
+            console.warn(`   ⚠️ No usage in stream (${streamAction}) — not logging`);
             if (lineBuffer.length > 0 && lineBuffer.length < 2000) {
               console.warn('   🔍 Last buffer sample:', lineBuffer.slice(-800));
             }
@@ -7933,7 +8402,7 @@ if (enableV1) {
           res.end();
         });
         stream.on('error', (err) => {
-          console.error('   ❌ Responses stream error:', err?.message);
+          console.error(`   ❌ ${streamAction} stream error:`, err?.message);
           if (!res.headersSent) res.status(500).json({ error: 'stream_error', message: err?.message });
           else try { res.end(); } catch (_) {}
         });
@@ -7985,6 +8454,8 @@ if (enableV1) {
             action = 'images.generations';
           } else if (targetUrl.includes('/responses')) {
             action = 'responses';
+          } else if (targetUrl.includes('/messages')) {
+            action = 'messages';
           }
           
           const usage = data?.usage || {};
@@ -8105,16 +8576,17 @@ if (enableV1) {
     } catch (e) {
       const status = e?.response?.status || 500;
       const rawData = e?.response?.data;
-      const errorData = (rawData && typeof rawData === 'object' && !rawData.pipe && typeof rawData.pipe !== 'function')
-        ? { error: rawData?.error, message: rawData?.message, code: rawData?.error?.code || rawData?.code }
-        : { message: rawData?.message || e?.message };
-      const errorMessage = errorData?.error?.message || errorData?.message || e?.message || 'Unknown error';
+      const errorData = buildProviderErrorDetails(rawData);
+      const errorMessage = errorData.provider_message || errorData?.error?.message || errorData?.message || e?.message || 'Unknown error';
 
       // Log detailed error for debugging
       console.error(`   ❌ OpenRouter API error (${status}):`, {
-        message: errorMessage,
+        message: errorData?.error?.message || errorData?.message || e?.message,
         code: errorData?.error?.code || errorData?.code,
-        details: errorData
+        model: req.body?.model,
+        targetUrl,
+        provider_message: errorData.provider_message,
+        metadata: errorData.metadata
       });
       
       // Provide more helpful error messages
@@ -8290,6 +8762,26 @@ if (enableV1) {
       return await forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/chat/completions');
     } catch (error) {
       console.error('❌ Unexpected error in /api/v1/chat/completions:', error);
+      // Ensure we always return valid JSON
+      if (!res.headersSent) {
+        return res.status(500).json({ 
+          error: 'internal_server_error', 
+          message: 'An unexpected error occurred. Please try again.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    }
+  });
+
+  // POST /api/v1/messages
+  app.post('/api/v1/messages', async (req, res) => {
+    try {
+      console.log('📥 POST /api/v1/messages - Request received');
+      console.log('   Auth header:', req.headers.authorization ? 'Present' : 'Missing');
+      console.log('   Body:', JSON.stringify(req.body || {}).substring(0, 200));
+      return await forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/messages');
+    } catch (error) {
+      console.error('❌ Unexpected error in /api/v1/messages:', error);
       // Ensure we always return valid JSON
       if (!res.headersSent) {
         return res.status(500).json({ 
@@ -8774,6 +9266,40 @@ if (enableV1) {
   // GET /v1/models - Alternative path for n8n when Base URL is set to /ai_gateway_api
   app.get('/v1/models', handleModelsEndpoint);
 
+  // POST /v1/messages - Alternative path when base URL omits /api
+  app.post('/v1/messages', async (req, res) => {
+    try {
+      console.log('📥 POST /v1/messages - Request received');
+      return await forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/messages');
+    } catch (error) {
+      console.error('❌ Unexpected error in /v1/messages:', error);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          error: 'internal_server_error',
+          message: 'An unexpected error occurred. Please try again.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    }
+  });
+
+  // POST /v1/chat/completions - Alternative path when base URL omits /api
+  app.post('/v1/chat/completions', async (req, res) => {
+    try {
+      console.log('📥 POST /v1/chat/completions - Request received');
+      return await forwardToOpenRouter(req, res, 'https://openrouter.ai/api/v1/chat/completions');
+    } catch (error) {
+      console.error('❌ Unexpected error in /v1/chat/completions:', error);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          error: 'internal_server_error',
+          message: 'An unexpected error occurred. Please try again.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    }
+  });
+
   // POST /v1/responses - Alternative path for n8n (when base URL omits /api)
   app.post('/v1/responses', async (req, res) => {
     try {
@@ -8792,7 +9318,10 @@ if (enableV1) {
   });
 
   console.log('   📍 POST /api/v1/chat/completions');
+  console.log('   📍 POST /api/v1/messages');
   console.log('   📍 POST /api/v1/responses');
+  console.log('   📍 POST /v1/chat/completions (compatibility)');
+  console.log('   📍 POST /v1/messages (compatibility)');
   console.log('   📍 POST /v1/responses (n8n compatibility)');
   console.log('   📍 POST /api/v1/images/generations');
   console.log('   📍 POST /api/v1/embeddings');
@@ -8885,6 +9414,8 @@ app.listen(PORT, async () => {
   console.log('');
   console.log('🤖 Chatbot:');
   console.log(`   💬 Usage: http://localhost:${PORT}/api/chatbot/usage`);
+  console.log(`   🔒 Code access: http://localhost:${PORT}/api/chatbot/code-access`);
+  console.log(`   📝 Code request: http://localhost:${PORT}/api/chatbot/code-request`);
   console.log('');
   console.log('🌉 Gateway:');
   console.log(`   🔄 Gateway: http://localhost:${PORT}/gateway/:provider/:action`);

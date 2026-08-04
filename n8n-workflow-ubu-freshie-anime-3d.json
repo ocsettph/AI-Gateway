@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## ตั้งค่า\n\n1. **AI Gateway** → Authorization = `Bearer ubu_xxx` (ปิด Expression)\n2. โมเดล: `google/gemini-2.5-flash-image`\n3. modalities: `[image, text]` + max_tokens 8192\n4. Gateway retry ว่างอัตโนมัติ 3 ครั้ง (restart backend)\n5. Save → Activate",
+        "content": "## ตั้งค่า\n\n1. **AI Gateway** → Authorization = `Bearer ubu_xxx` (ปิด Expression)\n2. โมเดล: `google/gemini-2.5-flash-image`\n3. modalities: `[image, text]` + max_tokens 8192\n4. Gateway ส่ง `user.email` มาพร้อม webhook — หลัง n8n ตอบรูปสำเร็จ **Backend จะส่งอีเมลแจ้งผู้ใช้อัตโนมัติ** (ไม่ต้องเพิ่ม node อีเมลใน n8n)\n5. Save → Activate",
         "height": 480,
         "width": 420,
         "color": 6
@@ -30,7 +30,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const j = $input.first().json;\nconst p =\n  j.body && typeof j.body === 'object' && !Array.isArray(j.body) && j.body.photo\n    ? j.body\n    : j;\n\nconst b64 = p.photo?.contentBase64;\nif (!b64) throw new Error('photo.contentBase64 missing');\n\nconst buf = Buffer.from(String(b64).replace(/^data:[^;]+;base64,/i, ''), 'base64');\nconst fileName = String(p.photo?.name || 'upload.jpg');\nconst mimeType = p.photo?.mimeType || 'image/jpeg';\nconst rawB64 = buf.toString('base64');\n\nconst prompt =\n  String(p.prompt || '').trim() ||\n  'Transform this portrait into a high-quality 3D anime character style, clean lighting, soft skin, expressive eyes, keep face likeness, single person, portrait framing, no text, no watermark';\n\nreturn [\n  {\n    json: {\n      event: p.event || 'ubu_freshie_anime_3d',\n      style: p.style || '3d_anime',\n      prompt,\n      fileName,\n      mimeType,\n      imageDataUrl: `data:${mimeType};base64,${rawB64}`\n    }\n  }\n];"
+        "jsCode": "const j = $input.first().json;\nconst p =\n  j.body && typeof j.body === 'object' && !Array.isArray(j.body) && j.body.photo\n    ? j.body\n    : j;\n\nconst b64 = p.photo?.contentBase64;\nif (!b64) throw new Error('photo.contentBase64 missing');\n\nconst buf = Buffer.from(String(b64).replace(/^data:[^;]+;base64,/i, ''), 'base64');\nconst fileName = String(p.photo?.name || 'upload.jpg');\nconst mimeType = p.photo?.mimeType || 'image/jpeg';\nconst rawB64 = buf.toString('base64');\n\nconst prompt =\n  String(p.prompt || '').trim() ||\n  'Transform this portrait into a high-quality 3D anime character style, clean lighting, soft skin, expressive eyes, keep face likeness, single person, portrait framing, no text, no watermark';\n\nconst u = p.user || {};\n\nreturn [\n  {\n    json: {\n      event: p.event || 'ubu_freshie_anime_3d',\n      style: p.style || '3d_anime',\n      prompt,\n      fileName,\n      mimeType,\n      imageDataUrl: `data:${mimeType};base64,${rawB64}`,\n      userEmail: String(u.email || '').trim(),\n      userFullname: String(u.fullname || u.username || '').trim()\n    }\n  }\n];"
       },
       "id": "11f648a2-078b-4ef7-a283-eb8a04248c35",
       "name": "เตรียมรูป",
